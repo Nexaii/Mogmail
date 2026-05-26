@@ -7,6 +7,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Constants;
 using Mogmail.Managers;
 using Mogmail.Models;
 
@@ -14,8 +15,6 @@ namespace Mogmail.UI;
 
 public sealed class ToolbarWindow : Window
 {
-    private const string LetterListAddon = "LetterList";
-
     private const float IconicButtonSizeSmall = 28f;
     private const float IconicButtonSizeLarge = 32f;
     private const float Gap = 5f;
@@ -309,7 +308,7 @@ public sealed class ToolbarWindow : Window
 
     private static unsafe AtkUnitBase* GetLetterListAddon()
     {
-        return Plugin.GameGui.GetAddonByName<AtkUnitBase>(LetterListAddon, 1);
+        return Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterList, 1);
     }
 
     private static void OnTakeClicked()

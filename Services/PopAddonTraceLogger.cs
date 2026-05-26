@@ -1,50 +1,45 @@
 using System;
+#if DEBUG
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Constants;
+#endif
 
 namespace Mogmail.Services;
 
 public sealed unsafe class PopAddonTraceLogger : IDisposable
 {
-    private static readonly string[] TrackedAddons =
-    {
-        "SelectYesno",
-        "SelectOk",
-        "SelectString",
-        "JournalResult",
-    };
-
     public PopAddonTraceLogger()
     {
-        foreach (var name in TrackedAddons)
+#if DEBUG
+        foreach (var name in AddonNames.Blocking)
         {
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, name, OnSetup);
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, name, OnFinalize);
         }
+#endif
     }
 
     public void Dispose()
     {
+#if DEBUG
         Plugin.AddonLifecycle.UnregisterListener(OnSetup);
         Plugin.AddonLifecycle.UnregisterListener(OnFinalize);
+#endif
     }
 
+#if DEBUG
     private static void OnSetup(AddonEvent type, AddonArgs args)
     {
-        if (!ShouldTrace()) return;
         var prompt = ReadPrompt(args);
         MogLog.Information($"[Mogmail][diag] addon PostSetup {args.AddonName} prompt=\"{Truncate(prompt, 120)}\"");
     }
 
     private static void OnFinalize(AddonEvent type, AddonArgs args)
     {
-        if (!ShouldTrace()) return;
         MogLog.Information($"[Mogmail][diag] addon PreFinalize {args.AddonName}");
     }
-
-    private static bool ShouldTrace() => Plugin.Config.VerboseTakeDiagnostics;
 
     private static string ReadPrompt(AddonArgs args)
     {
@@ -75,4 +70,5 @@ public sealed unsafe class PopAddonTraceLogger : IDisposable
         if (string.IsNullOrEmpty(s)) return "";
         return s.Length <= max ? s : s[..max] + "...";
     }
+#endif
 }

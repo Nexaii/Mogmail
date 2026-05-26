@@ -4,12 +4,12 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Constants;
 
 namespace Mogmail.UI;
 
 public sealed class PopProgressOverlay : Window
 {
-    private const string LetterListAddon = "LetterList";
     private const float VerticalGap = 4f;
 
     public PopProgressOverlay() : base("##MogmailPopProgress",
@@ -102,6 +102,6 @@ public sealed class PopProgressOverlay : Window
 
     private static unsafe AtkUnitBase* GetLetterListAddon()
     {
-        return Plugin.GameGui.GetAddonByName<AtkUnitBase>(LetterListAddon, 1);
+        return Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterList, 1);
     }
 }

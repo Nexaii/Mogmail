@@ -44,10 +44,12 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     private long _detailRequestedMs;
     private long _takeRequestedMs;
     private (ulong ContentId, uint Timestamp) _pendingTakeKey;
+#pragma warning disable CS0414
     private uint _pendingTakeGilPre;
     private readonly uint[] _pendingTakeSlotsPre = new uint[LetterAttachmentSlotCount];
-    private long _rejectionBackoffUntilMs;
     private int _lastLoggedAttachmentDelta = -1;
+#pragma warning restore CS0414
+    private long _rejectionBackoffUntilMs;
 
     private bool _autoDeleteAfterTake;
     private readonly HashSet<(ulong ContentId, uint Timestamp)> _autoDeleteKeys = [];
@@ -254,8 +256,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
     private void LogAttachmentDelta(int liveIdx)
     {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return;
-
+#if DEBUG
         Span<uint> live = stackalloc uint[LetterAttachmentSlotCount];
         if (!Plugin.Instance.Mailbox.SnapshotAttachmentState(liveIdx, out var gilLive, live)) return;
 
@@ -269,23 +270,27 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         MogLog.Information(
             $"[Mogmail][trace] phase=AwaitingTakeAck idx={liveIdx} cleared_slots={clearedCount}/{NonZeroCount(_pendingTakeSlotsPre)} gil_cleared={(gilCleared == 1 ? "yes" : "no")} elapsed={Environment.TickCount64 - _takeRequestedMs}ms");
+#endif
     }
 
     private void DumpFinalSlotState(int liveIdx)
     {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return;
+#if DEBUG
         Span<uint> live = stackalloc uint[LetterAttachmentSlotCount];
         if (!Plugin.Instance.Mailbox.SnapshotAttachmentState(liveIdx, out var gilLive, live)) return;
         MogLog.Information(
             $"[Mogmail][trace] final state idx={liveIdx} pre_slots=[{_pendingTakeSlotsPre[0]},{_pendingTakeSlotsPre[1]},{_pendingTakeSlotsPre[2]},{_pendingTakeSlotsPre[3]},{_pendingTakeSlotsPre[4]}] live_slots=[{live[0]},{live[1]},{live[2]},{live[3]},{live[4]}] gil_pre={_pendingTakeGilPre} gil_live={gilLive}");
+#endif
     }
 
+#if DEBUG
     private static int NonZeroCount(uint[] arr)
     {
         var n = 0;
         for (var i = 0; i < arr.Length; i++) if (arr[i] != 0) n++;
         return n;
     }
+#endif
 
     private int ResolveLetterByKey((ulong ContentId, uint Timestamp) key)
     {
@@ -515,8 +520,11 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
     private static void TraceTake(string line)
     {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return;
+#if DEBUG
         MogLog.Information($"[Mogmail][trace] {line}");
+#else
+        _ = line;
+#endif
     }
 
     private void InvokeDelete(int idx)

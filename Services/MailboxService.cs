@@ -3,13 +3,12 @@ using System.Runtime.InteropServices;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using Mogmail.Constants;
 
 namespace Mogmail.Services;
 
 public sealed unsafe class MailboxService : IDisposable
 {
-    private const string LetterListAddon = "LetterList";
-
     private const int LetterAttachmentBase = 0x0C;
     private const int LetterAttachmentStride = 0x14;
     private const int LetterAttachmentSlotCount = 5;
@@ -30,8 +29,8 @@ public sealed unsafe class MailboxService : IDisposable
 
     public MailboxService()
     {
-        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, LetterListAddon, OnPostSetup);
-        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, LetterListAddon, OnPreFinalize);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, AddonNames.LetterList, OnPostSetup);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, AddonNames.LetterList, OnPreFinalize);
 
         if (Plugin.SigScanner.TryScanText(RequestLetterDetailSignature, out var detailAddr))
         {

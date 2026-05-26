@@ -1,24 +1,20 @@
 using System;
+#if DEBUG
 using System.Collections.Generic;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Constants;
+#endif
 
 namespace Mogmail.Services;
 
 public sealed unsafe class UseActionDiagnosticHook : IDisposable
 {
+#if DEBUG
     private static readonly long[] SampleOffsetsMs = { 500, 1000, 2000, 5000 };
-
-    private static readonly string[] WatchedAddons =
-    {
-        "SelectYesno",
-        "SelectOk",
-        "SelectString",
-        "JournalResult",
-    };
 
     private readonly Hook<ActionManager.Delegates.UseAction>? _hook;
     private readonly List<PendingSample> _pendingSamples = new();
@@ -31,9 +27,11 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         public bool ReturnValue;
         public int NextOffsetIdx;
     }
+#endif
 
     public UseActionDiagnosticHook()
     {
+#if DEBUG
         var address = (nint)ActionManager.MemberFunctionPointers.UseAction;
         if (address == 0)
         {
@@ -44,21 +42,25 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         _hook.Enable();
         Plugin.Framework.Update += Tick;
         MogLog.Information($"[Mogmail] UseAction diagnostic hook installed at 0x{address:X}.");
+#endif
     }
 
     public void Dispose()
     {
+#if DEBUG
         Plugin.Framework.Update -= Tick;
         _hook?.Disable();
         _hook?.Dispose();
         _pendingSamples.Clear();
+#endif
     }
 
+#if DEBUG
     private bool Detour(ActionManager* mgr, ActionType actionType, uint actionId, ulong targetId, uint extraParam, ActionManager.UseActionMode mode, uint comboRouteId, bool* outOptAreaTargeted)
     {
         var rc = _hook!.Original(mgr, actionType, actionId, targetId, extraParam, mode, comboRouteId, outOptAreaTargeted);
 
-        if (!ShouldDiagnose(actionType)) return rc;
+        if (actionType != ActionType.Item) return rc;
 
         var now = Environment.TickCount64;
         MogLog.Information(
@@ -74,13 +76,6 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         });
 
         return rc;
-    }
-
-    private static bool ShouldDiagnose(ActionType actionType)
-    {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return false;
-        if (actionType != ActionType.Item) return false;
-        return true;
     }
 
     private void Tick(IFramework framework)
@@ -119,11 +114,12 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
     private static string ListBlockingAddons()
     {
         var hits = new List<string>();
-        foreach (var name in WatchedAddons)
+        foreach (var name in AddonNames.Blocking)
         {
             var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(name, 1);
             if (addon != null && addon->IsVisible) hits.Add(name);
         }
         return string.Join(",", hits);
     }
+#endif
 }

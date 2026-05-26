@@ -16,9 +16,6 @@ public sealed class DiagnosticsTab : ISettingsTab
         if (Theme.DrawSectionHeader("Bulk")) DrawBulkSection();
         ImGui.Spacing();
 
-        if (Theme.DrawSectionHeader("Logging")) DrawLoggingSection();
-        ImGui.Spacing();
-
         if (Theme.DrawSectionHeader("Plugin log file")) DrawExternalLogSection();
         ImGui.Spacing();
 
@@ -34,17 +31,6 @@ public sealed class DiagnosticsTab : ISettingsTab
             Plugin.Config.Save();
         }
         Theme.HelperText("Max letters per bulk run. Clamped to 1-130.");
-    }
-
-    private static void DrawLoggingSection()
-    {
-        var verbose = Plugin.Config.VerboseTakeDiagnostics;
-        if (SettingsRows.Checkbox("Verbose take logging", ref verbose))
-        {
-            Plugin.Config.VerboseTakeDiagnostics = verbose;
-            Plugin.Config.Save();
-        }
-        Theme.HelperText("Per-letter ack timings to /xllog.");
     }
 
     private static void DrawExternalLogSection()

@@ -59,7 +59,7 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Instance = this;
-        Config = LoadAndSanitizeConfig();
+        Config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         Mailbox = new MailboxService();
         MailRejectionWatcher = new MailRejectionWatcher(Chat);
@@ -125,38 +125,6 @@ public sealed class Plugin : IDalamudPlugin
 
         Log.Info("[Mogmail] unloaded");
         Services.MogLog.Shutdown();
-    }
-
-    private static Configuration LoadAndSanitizeConfig()
-    {
-        var cfg = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        var dirty = false;
-        if (cfg.ToolbarLayout != ToolbarLayout.Vertical)
-        {
-            Log.Information("[Mogmail] migrating ToolbarLayout to Vertical. Horizontal layout was removed in 0.4.3.");
-            cfg.ToolbarLayout = ToolbarLayout.Vertical;
-            dirty = true;
-        }
-        if (cfg.ToolbarAttach == ToolbarAttach.SnappedTop)
-        {
-            Log.Information("[Mogmail] migrating ToolbarAttach from SnappedTop to SnappedLeft. Top anchor was removed in 0.4.3.");
-            cfg.ToolbarAttach = ToolbarAttach.SnappedLeft;
-            dirty = true;
-        }
-        if (cfg.ToolbarAttach == ToolbarAttach.Free)
-        {
-            Log.Information("[Mogmail] migrating ToolbarAttach from Free to SnappedLeft. Free anchor was removed in 0.4.7.");
-            cfg.ToolbarAttach = ToolbarAttach.SnappedLeft;
-            dirty = true;
-        }
-        if (cfg.ButtonDisplayMode != ButtonDisplayMode.Iconic)
-        {
-            Log.Information("[Mogmail] migrating ButtonDisplayMode to Iconic. Text-only mode was removed in 0.4.5.");
-            cfg.ButtonDisplayMode = ButtonDisplayMode.Iconic;
-            dirty = true;
-        }
-        if (dirty) cfg.Save();
-        return cfg;
     }
 
     private void OnDraw()

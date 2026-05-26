@@ -2,9 +2,9 @@
     "Author": "Nexai",
     "Name": "Mogmail",
     "InternalName": "Mogmail",
-    "AssemblyVersion": "1.0.0.0",
+    "AssemblyVersion": "1.0.1.0",
     "Description": "A better mail service. Bulk attachment claiming, bulk delete, and inventory pop.",
-    "Punchline": "\"I got a promotion AND a jetpack, kupo!\"",
+    "Punchline": "\"Nice mailbox. It would be a shame if someone... emptied it, kupo.\"",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
     "Tags": [
@@ -20,5 +20,5 @@
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/mogmail.png",
     "RepoUrl": "https://github.com/Nexaii/Mogmail",
-    "Changelog": "- Initial release"
+    "Changelog": "- Updated icon and punchline\n- Removed diagnostic toggle from settings in release build"
 }

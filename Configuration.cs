@@ -21,7 +21,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool ConfirmBeforeDelete { get; set; } = true;
     public bool IncludeGMInSweeps { get; set; } = false;
-    public bool VerboseTakeDiagnostics { get; set; } = false;
 
     public ClaimAction LastDeleteScope { get; set; } = ClaimAction.DeleteReadEmpty;
 
@@ -68,7 +67,6 @@ public sealed class Configuration : IPluginConfiguration
 
         ConfirmBeforeDelete = true;
         IncludeGMInSweeps = false;
-        VerboseTakeDiagnostics = false;
 
         LastDeleteScope = ClaimAction.DeleteReadEmpty;
 

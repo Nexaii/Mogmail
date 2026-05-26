@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using Mogmail.Constants;
 
 namespace Mogmail.Services;
 
@@ -22,18 +23,10 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private const int MaxUseActionRetries = 3;
     private const float AnimationLockEpsilon = 0.05f;
 
-    private static readonly string[] BlockingAddons =
-    {
-        "SelectYesno",
-        "SelectOk",
-        "SelectString",
-        "JournalResult",
-    };
     private const long ArmStillnessMs = 400;
     private const float ArmStillnessEpsilon = 0.05f;
     private const long ArmTimeoutMs = 60_000;
     private const long MailboxCloseThrottleMs = 750;
-    private const string LetterListAddon = "LetterList";
     private const int ConsecutiveSkipAbortThreshold = 5;
     private const long PostSuccessCooldownMs = 3000;
     private const long SilentFailureRefireMs = 5000;
@@ -80,7 +73,9 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private readonly Dictionary<uint, int> _useActionRetries = new();
     private uint _pendingBaseItemId;
     private bool _pendingWasUnlocked;
+#if DEBUG
     private long _lastDiagLogMs;
+#endif
     private long _lastSuccessMs;
     private long _lastUseActionTrueFireMs;
     private uint _lastUseActionTrueItemId;
@@ -452,7 +447,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
     private static bool IsBlockingAddonVisible(out string name)
     {
-        foreach (var addonName in BlockingAddons)
+        foreach (var addonName in AddonNames.Blocking)
         {
             var ptr = Plugin.GameGui.GetAddonByName<AtkUnitBase>(addonName, 1);
             if (ptr != null && ptr->IsVisible)
@@ -542,19 +537,21 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
     private void TraceAckTick()
     {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return;
+#if DEBUG
         var now = Environment.TickCount64;
         if (now - _lastDiagLogMs < 500) return;
         _lastDiagLogMs = now;
         var am = ActionManager.Instance();
         var lockSec = am != null ? am->AnimationLock : -1f;
         MogLog.Information($"[Mogmail][trace] ack-wait #{_pendingUseItemId} elapsed={now - _useRequestedMs}ms anim={lockSec:F2}s");
+#endif
     }
 
     private static void TraceDiag(Func<string> msg)
     {
-        if (!Plugin.Config.VerboseTakeDiagnostics) return;
+#if DEBUG
         MogLog.Information($"[Mogmail][trace] {msg()}");
+#endif
     }
 
     private void CheckConsecutiveSkipAbort()
@@ -633,8 +630,9 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         {
             _armStillSinceMs = 0;
             _armLastPos = Plugin.ObjectTable.LocalPlayer?.Position ?? _armLastPos;
-            if (Plugin.Config.VerboseTakeDiagnostics)
-                MogLog.Information($"[Mogmail] pop arm gate fail: {reason}");
+#if DEBUG
+            MogLog.Information($"[Mogmail] pop arm gate fail: {reason}");
+#endif
             return;
         }
 
@@ -701,7 +699,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         if (now - _lastMailboxCloseAttemptMs < MailboxCloseThrottleMs) return;
         _lastMailboxCloseAttemptMs = now;
 
-        var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(LetterListAddon, 1);
+        var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterList, 1);
         if (addon == null) return;
         if (!addon->IsVisible) return;
         addon->Close(true);

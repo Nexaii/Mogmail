@@ -17,6 +17,12 @@ public sealed class GeneralTab : ISettingsTab
             ImGui.Spacing();
 
             if (Theme.DrawSectionHeader("Deletion")) DrawDeletionSection();
+            ImGui.Spacing();
+
+            if (Theme.DrawSectionHeader("Notifications")) DrawGiftEchoSection();
+            ImGui.Spacing();
+
+            if (Theme.DrawSectionHeader("Archive")) DrawArchiveSection();
         }
         finally
         {
@@ -34,10 +40,39 @@ public sealed class GeneralTab : ISettingsTab
         }
     }
 
+    private static void DrawGiftEchoSection()
+    {
+        var enabled = Plugin.Config.EnableGiftEcho;
+        if (SettingsRows.Checkbox("Echo gift sender on Take", ref enabled, "When you claim attachments from a Purchases & Rewards gift letter, print the original gift sender and the items to local Echo chat."))
+        {
+            Plugin.Config.EnableGiftEcho = enabled;
+            Plugin.Config.Save();
+        }
+    }
+
+    private static void DrawArchiveSection()
+    {
+        var enabled = Plugin.Config.EnableArchive;
+        if (SettingsRows.Checkbox("Enable archive", ref enabled, "Record received letters (header, attachments, gil, full body when read) per character. Local files only."))
+        {
+            var wasEnabled = Plugin.Config.EnableArchive;
+            Plugin.Config.EnableArchive = enabled;
+            Plugin.Config.Save();
+            if (wasEnabled && !enabled)
+                Plugin.Instance.CloseArchiveWindow();
+        }
+
+        if (Plugin.Config.EnableArchive)
+        {
+            if (SettingsRows.PrimaryButton("Open Archive", "Open the archive viewer window."))
+                Plugin.Instance.OpenArchiveWindow();
+        }
+    }
+
     private static void DrawDeletionSection()
     {
         var confirm = Plugin.Config.ConfirmBeforeDelete;
-        if (SettingsRows.Checkbox("Confirm before delete", ref confirm, "Show a confirm dialog before any bulk delete."))
+        if (SettingsRows.Checkbox("Confirm before delete", ref confirm, "Show a confirm dialog before bulk delete and Take + Delete."))
         {
             Plugin.Config.ConfirmBeforeDelete = confirm;
             Plugin.Config.Save();
@@ -49,7 +84,6 @@ public sealed class GeneralTab : ISettingsTab
             Plugin.Config.IncludeGMInSweeps = includeGm;
             Plugin.Config.Save();
         }
-        Theme.HelperText("GM letters are protected by default. Off keeps them out of every sweep.");
     }
 
 }

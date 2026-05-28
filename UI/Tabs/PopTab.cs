@@ -71,7 +71,7 @@ public sealed class PopTab : ISettingsTab
 
     private static void DrawSensitiveSection()
     {
-        Theme.HelperText("Default: Off. If enabled, a confirm window appears and only [1] sensitive item is used per session, across all categories. Covers tier IV items from the Mog Station.");
+        Theme.HelperText("Opt-in. One per Pop run.");
         ImGui.Spacing();
 
         var flags = ImGuiTableFlags.Borders

@@ -38,6 +38,9 @@ public sealed class Configuration : IPluginConfiguration
     public bool EnableExternalLogFile { get; set; } = false;
     public string ExternalLogFilePath { get; set; } = "";
 
+    public bool EnableGiftEcho { get; set; } = false;
+    public bool EnableArchive { get; set; } = false;
+
     public float PopOverlayPosX { get; set; } = -1f;
     public float PopOverlayPosY { get; set; } = -1f;
 
@@ -81,5 +84,8 @@ public sealed class Configuration : IPluginConfiguration
 
         EnableExternalLogFile = false;
         ExternalLogFilePath = "";
+
+        EnableGiftEcho = false;
+        EnableArchive = false;
     }
 }

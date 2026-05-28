@@ -1,9 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Mogmail.Constants;
+using Mogmail.Models;
 
 namespace Mogmail.Services;
 
@@ -17,21 +18,45 @@ public sealed unsafe class MailboxService : IDisposable
     private const int LetterCategoryOffset = 0x85;
 
     private const int InfoProxyPendingDetailIndexOffset = 0x7600;
+    private const int InfoProxyEntryCountOffset = 0x10;
+    private const int LetterStructSize = 0xE8;
+    private const int LetterArrayBaseOffset = 0x30;
+    private const int LetterDetailBodyOffset = 0x0C;
+
     private const string RequestLetterDetailSignature =
         "40 55 41 54 41 57 48 81 EC B0 0F 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 83 B9 00 76 00 00 00";
+
+    private const string AddDataSignature =
+        "53 55 56 57 41 54 48 83 EC 40 48 8B D9 45 8B E0 48 8B 49 08 48 8B EA 48 8B 01 FF 50 40";
+
+    private const string HandleLetterDetailResponseSignature =
+        "48 89 5C 24 18 56 41 56 41 57 48 83 EC 30 8B 81 00 76 00 00 48 8B DA 48 8B F1";
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate byte RequestLetterDetailDelegate(InfoProxyLetter* infoProxy, uint letterIndex);
 
-    private readonly RequestLetterDetailDelegate? _requestLetterDetail;
+    private delegate void AddDataDelegate(InfoProxyLetter* proxy, byte* packet, uint count);
 
-    public bool IsMailboxOpen { get; private set; }
+    private delegate void HandleLetterDetailResponseDelegate(InfoProxyLetter* proxy, byte* packet);
+
+    private readonly RequestLetterDetailDelegate? _requestLetterDetail;
+    private readonly Hook<AddDataDelegate>? _addDataHook;
+    private readonly Hook<HandleLetterDetailResponseDelegate>? _handleLetterDetailHook;
+
+    public event Action<int>? NewLetterObserved;
+    public event Action<string, ulong, uint>? LetterDetailReceived;
+
+    public bool IsMailboxOpen
+    {
+        get
+        {
+            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterList, 1);
+            return addon != null && addon->IsReady && addon->IsVisible;
+        }
+    }
 
     public MailboxService()
     {
-        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, AddonNames.LetterList, OnPostSetup);
-        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, AddonNames.LetterList, OnPreFinalize);
-
         if (Plugin.SigScanner.TryScanText(RequestLetterDetailSignature, out var detailAddr))
         {
             _requestLetterDetail = Marshal.GetDelegateForFunctionPointer<RequestLetterDetailDelegate>(detailAddr);
@@ -41,13 +66,103 @@ public sealed unsafe class MailboxService : IDisposable
         {
             MogLog.Warning("[Mogmail] RequestLetterDetail signature not found. Take path will skip detail-request prefix (vanilla packet order broken).");
         }
+
+        if (Plugin.SigScanner.TryScanText(AddDataSignature, out var addDataAddr))
+        {
+            _addDataHook = Plugin.GameInteropProvider.HookFromAddress<AddDataDelegate>(addDataAddr, AddDataDetour);
+            _addDataHook.Enable();
+            MogLog.Information($"[Mogmail] AddData hook installed at 0x{addDataAddr.ToInt64():X}");
+        }
+        else
+        {
+            MogLog.Warning("[Mogmail] AddData signature not found. Archive receive tracking will rely on degraded fallback path.");
+        }
+
+        if (Plugin.SigScanner.TryScanText(HandleLetterDetailResponseSignature, out var detailRespAddr))
+        {
+            _handleLetterDetailHook = Plugin.GameInteropProvider.HookFromAddress<HandleLetterDetailResponseDelegate>(detailRespAddr, HandleLetterDetailDetour);
+            _handleLetterDetailHook.Enable();
+            MogLog.Information($"[Mogmail] HandleLetterDetailResponse hook installed at 0x{detailRespAddr.ToInt64():X}");
+        }
+        else
+        {
+            MogLog.Warning("[Mogmail] HandleLetterDetailResponse signature not found. Archive will not capture full message bodies.");
+        }
     }
 
     public void Dispose()
     {
-        Plugin.AddonLifecycle.UnregisterListener(OnPostSetup);
-        Plugin.AddonLifecycle.UnregisterListener(OnPreFinalize);
-        IsMailboxOpen = false;
+        _addDataHook?.Disable();
+        _addDataHook?.Dispose();
+        _handleLetterDetailHook?.Disable();
+        _handleLetterDetailHook?.Dispose();
+    }
+
+    private void AddDataDetour(InfoProxyLetter* proxy, byte* packet, uint count)
+    {
+        var oldEntryCount = proxy != null ? *(uint*)((byte*)proxy + InfoProxyEntryCountOffset) : 0u;
+        _addDataHook!.Original(proxy, packet, count);
+        if (proxy == null) return;
+        var newEntryCount = *(uint*)((byte*)proxy + InfoProxyEntryCountOffset);
+        if (newEntryCount <= oldEntryCount) return;
+        var handler = NewLetterObserved;
+        if (handler == null) return;
+        try
+        {
+            for (var i = oldEntryCount; i < newEntryCount; i++)
+                handler((int)i);
+        }
+        catch (Exception ex)
+        {
+            MogLog.Warning($"[Mogmail] NewLetterObserved subscriber threw: {ex.Message}");
+        }
+    }
+
+    private void HandleLetterDetailDetour(InfoProxyLetter* proxy, byte* packet)
+    {
+        ulong cid = 0;
+        uint timestamp = 0;
+        string body = "";
+        var captured = false;
+
+        if (proxy != null && packet != null)
+        {
+            var pendingIdx = *(int*)((byte*)proxy + InfoProxyPendingDetailIndexOffset);
+            if (pendingIdx >= 0 && pendingIdx < proxy->EntryCount)
+            {
+                var letterBase = (byte*)proxy + LetterArrayBaseOffset + LetterStructSize * pendingIdx;
+                cid = *(ulong*)letterBase;
+                timestamp = *(uint*)(letterBase + 0x08);
+                body = ReadNullTerminatedUtf8(packet + LetterDetailBodyOffset);
+                captured = true;
+            }
+        }
+
+        _handleLetterDetailHook!.Original(proxy, packet);
+
+        if (!captured) return;
+        var handler = LetterDetailReceived;
+        if (handler == null) return;
+        try { handler(body, cid, timestamp); }
+        catch (Exception ex) { MogLog.Warning($"[Mogmail] LetterDetailReceived subscriber threw: {ex.Message}"); }
+    }
+
+    private static string ReadNullTerminatedUtf8(byte* ptr)
+    {
+        if (ptr == null) return "";
+        var buffer = new System.Collections.Generic.List<byte>(256);
+        var depth = 0;
+        var i = 0;
+        while (i < 0x4000)
+        {
+            var b = ptr[i++];
+            if (b == 0) break;
+            if (b == 0x02) { depth++; continue; }
+            if (b == 0x03 && depth > 0) { depth--; continue; }
+            if (depth == 0) buffer.Add(b);
+        }
+        if (buffer.Count == 0) return "";
+        return System.Text.Encoding.UTF8.GetString(buffer.ToArray()).Trim();
     }
 
     public bool IsAvailable => InfoProxyLetter.Instance() != null;
@@ -125,6 +240,44 @@ public sealed unsafe class MailboxService : IDisposable
         return proxy->Letters[index].SenderString;
     }
 
+    public uint GetGil(int index)
+    {
+        var proxy = InfoProxyLetter.Instance();
+        if (proxy == null || index < 0 || index >= proxy->EntryCount) return 0;
+        return ReadGil(LetterPointer(proxy, index));
+    }
+
+    public int GetAttachmentCount(int index)
+    {
+        var proxy = InfoProxyLetter.Instance();
+        if (proxy == null || index < 0 || index >= proxy->EntryCount) return 0;
+        return CountAttachments(LetterPointer(proxy, index));
+    }
+
+    public bool TrySnapshotLetter(int index, out LetterSnapshot snapshot)
+    {
+        snapshot = new LetterSnapshot();
+        var proxy = InfoProxyLetter.Instance();
+        if (proxy == null || index < 0 || index >= proxy->EntryCount) return false;
+
+        var letterPtr = LetterPointer(proxy, index);
+        snapshot.SenderContentId = (ulong)proxy->Letters[index].SenderContentId;
+        snapshot.Timestamp = (uint)proxy->Letters[index].Timestamp;
+        snapshot.Sender = proxy->Letters[index].SenderString;
+        snapshot.Preview = proxy->Letters[index].MessagePreviewString;
+        snapshot.Category = *(letterPtr + LetterCategoryOffset);
+        snapshot.Read = ReadReadFlag(letterPtr);
+        snapshot.Gil = ReadGil(letterPtr);
+        for (var slot = 0; slot < LetterAttachmentSlotCount; slot++)
+        {
+            var itemId = ReadAttachmentItemId(letterPtr, slot);
+            if (itemId == 0) continue;
+            var count = ReadAttachmentCount(letterPtr, slot);
+            snapshot.Attachments.Add(new AttachmentSnapshot(itemId, count));
+        }
+        return true;
+    }
+
     public bool CanRequestLetterDetail => _requestLetterDetail != null;
 
     public bool RequestLetterDetail(int index)
@@ -151,6 +304,9 @@ public sealed unsafe class MailboxService : IDisposable
     private static uint ReadAttachmentItemId(byte* letterPtr, int slot)
         => *(uint*)(letterPtr + LetterAttachmentBase + LetterAttachmentStride * slot);
 
+    private static uint ReadAttachmentCount(byte* letterPtr, int slot)
+        => *(uint*)(letterPtr + LetterAttachmentBase + LetterAttachmentStride * slot + 4);
+
     private static uint ReadGil(byte* letterPtr)
         => *(uint*)(letterPtr + LetterGilOffset);
 
@@ -164,7 +320,4 @@ public sealed unsafe class MailboxService : IDisposable
             if (ReadAttachmentItemId(letterPtr, slot) != 0) n++;
         return n;
     }
-
-    private void OnPostSetup(AddonEvent type, AddonArgs args) => IsMailboxOpen = true;
-    private void OnPreFinalize(AddonEvent type, AddonArgs args) => IsMailboxOpen = false;
 }

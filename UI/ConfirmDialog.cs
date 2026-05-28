@@ -28,6 +28,8 @@ public sealed class ConfirmDialog : Window
     private Func<ClaimAction, ScopePreview>? _previewProvider;
     private Action<ClaimAction>? _onConfirm;
     private ScopePreview _preview;
+    private bool _dontAskAgain;
+    private int _centerFramesRemaining;
 
     public ConfirmDialog() : base("Delete##MogmailConfirm",
         ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings)
@@ -35,7 +37,7 @@ public sealed class ConfirmDialog : Window
         Size = new Vector2(460, 0);
         SizeCondition = ImGuiCond.Always;
         IsOpen = false;
-        ShowCloseButton = false;
+        ShowCloseButton = true;
         RespectCloseHotkey = true;
     }
 
@@ -45,7 +47,17 @@ public sealed class ConfirmDialog : Window
         _previewProvider = previewProvider;
         _onConfirm = onConfirm;
         _preview = previewProvider(initialScope);
+        _dontAskAgain = false;
+        _centerFramesRemaining = 2;
         IsOpen = true;
+    }
+
+    public override void PreDraw()
+    {
+        if (_centerFramesRemaining <= 0) return;
+        if (MailboxAddonPositioning.TryGetLetterListCenter(out var center))
+            ImGui.SetNextWindowPos(center, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+        _centerFramesRemaining--;
     }
 
     public override void Draw()
@@ -113,10 +125,21 @@ public sealed class ConfirmDialog : Window
         {
             if (ImGui.Button("Delete", new Vector2(160, 28)))
             {
+                if (_dontAskAgain)
+                {
+                    Plugin.Config.ConfirmBeforeDelete = false;
+                    Plugin.Config.Save();
+                }
                 _onConfirm?.Invoke(_scope);
                 IsOpen = false;
             }
         }
+
+        ImGui.Spacing();
+        using (ImRaii.PushColor(ImGuiCol.Text, Theme.ColorSubdued))
+            ImGui.Checkbox("Don't ask again", ref _dontAskAgain);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Re-enable in Settings > Confirm before delete.");
 
         if (cancelClicked || (ImGui.IsKeyPressed(ImGuiKey.Escape) && !ImGui.IsAnyItemActive()))
             IsOpen = false;

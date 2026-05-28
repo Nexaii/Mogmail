@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Mogmail.UI.Tabs;
@@ -8,11 +10,13 @@ namespace Mogmail.UI;
 
 public sealed class SettingsWindow : Window
 {
+    private const string KoFiUrl = "https://ko-fi.com/nexai";
     private const float FrameRounding = 6f;
     private const float FrameBorderSize = 1f;
     private const float ChildRounding = 6f;
 
     private readonly ISettingsTab[] _tabs;
+    private readonly TitleBarButton _kofiButton;
 
     public SettingsWindow() : base("Mogmail##MogmailSettings")
     {
@@ -30,6 +34,18 @@ public sealed class SettingsWindow : Window
             new PopTab(),
             new DiagnosticsTab(),
         ];
+
+        _kofiButton = new TitleBarButton
+        {
+            Icon = FontAwesomeIcon.Heart,
+            ShowTooltip = () => ImGui.SetTooltip("Support on Ko-Fi"),
+            Priority = int.MinValue,
+            IconOffset = new Vector2(1.5f, 1),
+            Click = _ => OpenKoFiLink(),
+            AvailableClickthrough = true,
+        };
+
+        TitleBarButtons.Add(_kofiButton);
     }
 
     public override void Draw()
@@ -52,5 +68,21 @@ public sealed class SettingsWindow : Window
         }
 
         ImGui.EndTabBar();
+    }
+
+    private static void OpenKoFiLink()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = KoFiUrl,
+                UseShellExecute = true,
+                Verb = string.Empty,
+            });
+        }
+        catch
+        {
+        }
     }
 }

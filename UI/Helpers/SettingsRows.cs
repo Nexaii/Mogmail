@@ -39,11 +39,28 @@ public static class SettingsRows
         return clicked;
     }
 
+    public static bool PrimaryButton(string label, Vector2 size, string? tooltip = null)
+    {
+        using var color = ImRaii.PushColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+        var clicked = ImGui.Button(label, size);
+        if (tooltip != null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
+        return clicked;
+    }
+
     public static bool DangerButton(string label, string? tooltip = null)
     {
         using var color = ImRaii.PushColor(ImGuiCol.ButtonHovered, DangerHover)
                                 .Push(ImGuiCol.ButtonActive, DangerHover);
         var clicked = ImGui.Button(label);
+        if (tooltip != null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
+        return clicked;
+    }
+
+    public static bool DangerButton(string label, Vector2 size, string? tooltip = null)
+    {
+        using var color = ImRaii.PushColor(ImGuiCol.ButtonHovered, DangerHover)
+                                .Push(ImGuiCol.ButtonActive, DangerHover);
+        var clicked = ImGui.Button(label, size);
         if (tooltip != null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
         return clicked;
     }

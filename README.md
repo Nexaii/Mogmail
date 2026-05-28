@@ -2,7 +2,7 @@
   <h1>Mogmail</h1>
   <h3>A better mail service.</h3>
   <p>
-    Bulk attachment claiming, bulk delete, and inventory pop.
+    Bulk attachment claiming, bulk delete, inventory pop, and per-character mail archive.
     <br />
     <a href="#installation">Installation</a> · <a href="#features">Features</a> · <a href="#commands">Commands</a> · <a href="#ipc">IPC</a>
   </p>
@@ -37,20 +37,23 @@
 | Side | Snap toolbar left or right | (none) |
 | Settings | Open settings | (none) |
 
-### Delete dialog
+### Delete
 One Delete button. Opens a confirm dialog with a scope picker, a preview of what will be removed, and the last pick remembered. Scopes:
 
 | Scope | Removes |
 | :--- | :--- |
 | Empty | Letters with no attachments |
 | Read and Empty | Letters that are read and have no attachments |
-| System | Letters from NPCs, vendors, and rewards |
+| System | Letters from the Purchases & Rewards (Event Rewards, Mogstation, etc.) |
 | All | Every letter (player mail included) |
 
-GM letters are excluded by default.
+GM letters are excluded by default. The confirm dialog also gates the Take + Delete right-click on the Take button. Disable in Settings > Confirm before delete (or via the dialog's "Don't ask again" checkbox).
 
 ### Pop
-Use registrable items (tickets, minions, mounts, orchestrions, etc.) straight from inventory. Sensitive categories (Fantasia, MSQ progression, journey items) prompt for confirm. Optional auto pop after every Take.
+Use registrable items (tickets (aetheryte types are ignored), minions, mounts, orchestrions, etc.) straight from inventory. Sensitive categories (Fantasia, MSQ progression, journey items) prompt for confirm. Optional auto pop after every Take.
+
+### Archive
+Opt-in per character local record. Headers on receive, body on read. Search, category filter, Markdown export. Keeps 5000 newest. Enable in Settings > General > Archive.
 
 ## Commands
 
@@ -59,10 +62,11 @@ Use registrable items (tickets, minions, mounts, orchestrions, etc.) straight fr
 | `/mogmail` | Open settings |
 | `/mogmail pop` | Start inventory pop (prompts on sensitive items) |
 | `/mogmail stop` | Abort all runs and disarm pop |
+| `/mogmail archive` | Open archive viewer (no-op message if archive disabled) |
 
 ## IPC
 
-Other plugins can drive Mogmail via Dalamud IPC. Mutation calls return `bool`. `true` means the run started, `false` means refused (busy, mailbox closed, not available, or nothing to do).
+Other plugins can drive Mogmail via Dalamud IPC. Mutation calls return `bool`. `true` means the run started, `false` means refused (busy, mailbox closed, not available, or nothing to do). Actions require the mailbox to be open, though Pop does not.
 
 ### Readiness
 
@@ -84,11 +88,3 @@ Other plugins can drive Mogmail via Dalamud IPC. Mutation calls return `bool`. `
 | `Mogmail.DeleteReadEmpty` | `bool()` | Delete read letters with no attachments |
 | `Mogmail.Pop` | `bool(bool allowSensitive)` | Start pop. `true` skips the sensitive confirm |
 | `Mogmail.Stop` | `bool()` | Abort runs and disarm pop. `true` if anything stopped |
-
-Mailbox actions require the mailbox to be open. Pop does not.
-
-## Localization
-
-Mogmail recognizes sensitive items (Fantasia, Tales of Adventure) and pop-blacklisted items (Aetheryte Tickets) by Item RowID. The RowID set is built once at plugin load by matching the English Item sheet directly (`GetExcelSheet<Item>(ClientLanguage.English)`), so recognition works identically on every client language (EN, JP, DE, FR). Item names shown in dialogs and logs still display in the client's chosen language.
-
-If a future game patch renames an English item or removes a row, Mogmail logs a warning at startup and protection for that item is disabled until the patch lands here.

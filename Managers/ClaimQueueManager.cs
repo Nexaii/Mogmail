@@ -44,6 +44,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     private long _detailRequestedMs;
     private long _takeRequestedMs;
     private (ulong ContentId, uint Timestamp) _pendingTakeKey;
+    private LetterSnapshot? _pendingTakeSnapshot;
 #pragma warning disable CS0414
     private uint _pendingTakeGilPre;
     private readonly uint[] _pendingTakeSlotsPre = new uint[LetterAttachmentSlotCount];
@@ -241,6 +242,11 @@ public sealed unsafe class ClaimQueueManager : IDisposable
             TraceTake($"ack received idx={liveIdx} elapsed={Environment.TickCount64 - _takeRequestedMs}ms");
             Processed++;
             if (_autoDeleteAfterTake) _autoDeleteKeys.Add(_pendingTakeKey);
+            if (_pendingTakeSnapshot != null)
+            {
+                Plugin.Instance.GiftEcho.TryEmit(_pendingTakeSnapshot);
+                Plugin.Instance.Archive.RecordTake(_pendingTakeSnapshot);
+            }
             ResetTakePhase();
             return;
         }
@@ -309,6 +315,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     {
         _pendingTakeIdx = -1;
         _pendingTakeKey = (0, 0);
+        _pendingTakeSnapshot = null;
         _takePhase = TakePhase.ReadyForDetail;
     }
 
@@ -495,6 +502,10 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         Array.Clear(_pendingTakeSlotsPre);
         mailbox.SnapshotAttachmentState(idx, out _pendingTakeGilPre, _pendingTakeSlotsPre);
+        if (mailbox.TrySnapshotLetter(idx, out var snapshot))
+            _pendingTakeSnapshot = snapshot;
+        else
+            _pendingTakeSnapshot = null;
         TraceTake($"begin idx={idx} cid=0x{_pendingTakeKey.ContentId:X} ts={_pendingTakeKey.Timestamp} slots=[{_pendingTakeSlotsPre[0]},{_pendingTakeSlotsPre[1]},{_pendingTakeSlotsPre[2]},{_pendingTakeSlotsPre[3]},{_pendingTakeSlotsPre[4]}] gil={_pendingTakeGilPre}");
 
         if (!proxy->TakeAttachments((uint)idx, -1))
@@ -543,6 +554,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         _deleteBlacklist.Add((cid, ts));
 
         var deleted = proxy->DeleteLetter((uint)idx);
-        if (deleted) Processed++; else Skipped++;
+        if (deleted) Processed++;
+        else Skipped++;
     }
 }

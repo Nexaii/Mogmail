@@ -28,6 +28,7 @@ public sealed class ToolbarWindow : Window
 
     private readonly HoverTooltipDrawer _tooltips = new();
     private readonly ConfirmDialog _confirmDialog;
+    private readonly TakeDeleteConfirmDialog _takeDeleteConfirmDialog;
     private readonly Dictionary<string, Vector2> _buttonCenters = new();
 
     private Vector2 _windowPos;
@@ -36,7 +37,7 @@ public sealed class ToolbarWindow : Window
 
     private static float IconicButtonSize() => Plugin.Config.UseLargeToolbar ? IconicButtonSizeLarge : IconicButtonSizeSmall;
 
-    public ToolbarWindow(ConfirmDialog confirmDialog)
+    public ToolbarWindow(ConfirmDialog confirmDialog, TakeDeleteConfirmDialog takeDeleteConfirmDialog)
         : base("##MogmailToolbar",
             ImGuiWindowFlags.NoTitleBar
             | ImGuiWindowFlags.NoResize
@@ -48,6 +49,7 @@ public sealed class ToolbarWindow : Window
             | ImGuiWindowFlags.NoMove)
     {
         _confirmDialog = confirmDialog;
+        _takeDeleteConfirmDialog = takeDeleteConfirmDialog;
         IsOpen = true;
         RespectCloseHotkey = false;
         ShowCloseButton = false;
@@ -265,7 +267,6 @@ public sealed class ToolbarWindow : Window
 
     private static IReadOnlyList<int> BuildCandidates(ClaimAction action, bool includeGM)
     {
-        const ulong PlayerThreshold = 100_000_000_000UL;
         var mailbox = Plugin.Instance.Mailbox;
         var count = (int)mailbox.LoadedLetterCount;
         var result = new List<int>();
@@ -284,7 +285,7 @@ public sealed class ToolbarWindow : Window
                     if (mailbox.IsLetterReadFlag(i) && !mailbox.LetterHasUnclaimedAttachments(i)) result.Add(i);
                     break;
                 case ClaimAction.DeleteSystem:
-                    if (mailbox.GetSenderContentId(i) < PlayerThreshold) result.Add(i);
+                    if (mailbox.GetLetterCategory(i) == 1) result.Add(i);
                     break;
                 case ClaimAction.DeleteAll:
                     result.Add(i);
@@ -322,7 +323,7 @@ public sealed class ToolbarWindow : Window
         Plugin.Instance.ClaimQueue.StartTake("Take Attachment(s)", candidates);
     }
 
-    private static void OnTakeAndDeleteClicked()
+    private void OnTakeAndDeleteClicked()
     {
         var candidates = BuildCandidates(ClaimAction.Take, includeGM: false);
         if (candidates.Count == 0)
@@ -330,7 +331,25 @@ public sealed class ToolbarWindow : Window
             Plugin.Chat.Print("[Mogmail] no letters with attachments to claim.");
             return;
         }
-        Plugin.Instance.ClaimQueue.StartTakeAndDelete("Take + Delete", candidates);
+
+        if (!Plugin.Config.ConfirmBeforeDelete)
+        {
+            Plugin.Instance.ClaimQueue.StartTakeAndDelete("Take + Delete", candidates);
+            return;
+        }
+
+        _takeDeleteConfirmDialog.Show(
+            candidates.Count,
+            () =>
+            {
+                var fresh = BuildCandidates(ClaimAction.Take, includeGM: false);
+                if (fresh.Count == 0)
+                {
+                    Plugin.Chat.Print("[Mogmail] no letters with attachments to claim.");
+                    return;
+                }
+                Plugin.Instance.ClaimQueue.StartTakeAndDelete("Take + Delete", fresh);
+            });
     }
 
     private static void OnSettingsClicked() => Plugin.Instance.OpenSettings();
@@ -423,7 +442,6 @@ public sealed class ToolbarWindow : Window
 
     private static Func<int, bool> BuildDeletePredicate(ClaimAction action, bool includeGM)
     {
-        const ulong PlayerThreshold = 100_000_000_000UL;
         var mailbox = Plugin.Instance.Mailbox;
         return action switch
         {
@@ -436,7 +454,7 @@ public sealed class ToolbarWindow : Window
                 && !mailbox.LetterHasUnclaimedAttachments(i),
             ClaimAction.DeleteSystem => i =>
                 (includeGM || !mailbox.IsGMLetter(i))
-                && mailbox.GetSenderContentId(i) < PlayerThreshold,
+                && mailbox.GetLetterCategory(i) == 1,
             ClaimAction.DeleteAll => i =>
                 includeGM || !mailbox.IsGMLetter(i),
             _ => _ => false,

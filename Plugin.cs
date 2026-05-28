@@ -36,6 +36,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public MailboxService Mailbox { get; }
     public MailRejectionWatcher MailRejectionWatcher { get; }
+    public GiftEchoService GiftEcho { get; }
+    public MailArchiveService Archive { get; }
     public ClaimQueueManager ClaimQueue { get; }
     public AttachmentPopManager PopQueue { get; }
     public ReadAllManager ReadAll { get; }
@@ -50,10 +52,12 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem _windowSystem = new("Mogmail");
     private readonly SettingsWindow _settingsWindow;
     private readonly ConfirmDialog _confirmDialog;
+    private readonly TakeDeleteConfirmDialog _takeDeleteConfirmDialog;
     private readonly ToolbarWindow _toolbarWindow;
     private readonly ProcessingOverlay _processingOverlay;
     private readonly PopProgressOverlay _popProgressOverlay;
     private readonly SensitivePopConfirm _sensitivePopConfirm;
+    private readonly ArchiveWindow _archiveWindow;
     private bool _disposed;
 
     public Plugin()
@@ -63,6 +67,8 @@ public sealed class Plugin : IDalamudPlugin
 
         Mailbox = new MailboxService();
         MailRejectionWatcher = new MailRejectionWatcher(Chat);
+        GiftEcho = new GiftEchoService();
+        Archive = new MailArchiveService();
         ClaimQueue = new ClaimQueueManager();
         PopQueue = new AttachmentPopManager();
         ReadAll = new ReadAllManager();
@@ -74,17 +80,21 @@ public sealed class Plugin : IDalamudPlugin
 
         _settingsWindow = new SettingsWindow();
         _confirmDialog = new ConfirmDialog();
-        _toolbarWindow = new ToolbarWindow(_confirmDialog);
+        _takeDeleteConfirmDialog = new TakeDeleteConfirmDialog();
+        _toolbarWindow = new ToolbarWindow(_confirmDialog, _takeDeleteConfirmDialog);
         _processingOverlay = new ProcessingOverlay();
         _popProgressOverlay = new PopProgressOverlay();
         _sensitivePopConfirm = new SensitivePopConfirm();
+        _archiveWindow = new ArchiveWindow();
 
         _windowSystem.AddWindow(_settingsWindow);
         _windowSystem.AddWindow(_confirmDialog);
+        _windowSystem.AddWindow(_takeDeleteConfirmDialog);
         _windowSystem.AddWindow(_toolbarWindow);
         _windowSystem.AddWindow(_processingOverlay);
         _windowSystem.AddWindow(_popProgressOverlay);
         _windowSystem.AddWindow(_sensitivePopConfirm);
+        _windowSystem.AddWindow(_archiveWindow);
 
         PluginInterface.UiBuilder.Draw += OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -92,7 +102,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open settings. Subcommands: pop (use inventory items), stop (abort runs).",
+            HelpMessage = "Open settings. Subcommands: pop (use inventory items), stop (abort runs), archive (open archive viewer).",
         });
 
         Log.Info("[Mogmail] loaded");
@@ -111,6 +121,7 @@ public sealed class Plugin : IDalamudPlugin
         ReadAll.Dispose();
         PopQueue.Dispose();
         ClaimQueue.Dispose();
+        Archive.Dispose();
         MailRejectionWatcher.Dispose();
         Mailbox.Dispose();
 
@@ -156,13 +167,29 @@ public sealed class Plugin : IDalamudPlugin
                 PopQueue.Abort("user command");
                 ClaimQueue.Abort("user command");
                 return;
+            case "archive":
+                if (!Config.EnableArchive)
+                {
+                    Chat.Print("[Mogmail] archive is disabled. Enable it in Settings > General > Archive.");
+                    return;
+                }
+                OpenArchiveWindow();
+                return;
             default:
-                Chat.Print($"[Mogmail] unknown subcommand \"{sub}\". Try: pop, stop.");
+                Chat.Print($"[Mogmail] unknown subcommand \"{sub}\". Try: pop, stop, archive.");
                 return;
         }
     }
 
     public void OpenSettings() => _settingsWindow.IsOpen = true;
+
+    public void OpenArchiveWindow()
+    {
+        _archiveWindow.IsOpen = true;
+        _archiveWindow.BringToFront();
+    }
+
+    public void CloseArchiveWindow() => _archiveWindow.IsOpen = false;
 
     private void StartPopInteractive()
     {

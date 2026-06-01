@@ -32,13 +32,14 @@
 | :--- | :--- | :--- |
 | Take | Claim attachments | Claim, then delete the emptied letters |
 | Read All | Mark all unread as read | Mark all read, then delete read and empty |
-| Delete | Open confirm dialog | (none) |
+| Pop | Use registrable items now | (none) |
 | Auto Pop | Toggle auto pop after Take | (none) |
+| Delete | Open confirm dialog | (none) |
 | Side | Snap toolbar left or right | (none) |
 | Settings | Open settings | (none) |
 
 ### Delete
-One Delete button. Opens a confirm dialog with a scope picker, a preview of what will be removed, and the last pick remembered. Scopes:
+Opens a confirm dialog with a scope picker, a preview of what will be removed, and the last pick remembered.
 
 | Scope | Removes |
 | :--- | :--- |
@@ -50,7 +51,7 @@ One Delete button. Opens a confirm dialog with a scope picker, a preview of what
 GM letters are excluded by default. The confirm dialog also gates the Take + Delete right-click on the Take button. Disable in Settings > Confirm before delete (or via the dialog's "Don't ask again" checkbox).
 
 ### Pop
-Use registrable items (tickets (aetheryte types are ignored), minions, mounts, orchestrions, etc.) straight from inventory. Sensitive categories (Fantasia, MSQ progression, journey items) prompt for confirm. Optional auto pop after every Take.
+Use registrable items (tickets (aetheryte types are ignored), minions, mounts, orchestrions, etc.) straight from inventory. Works any time with `/mogmail pop` or the Pop button. No mailbox needed. Sensitive categories (Fantasia, MSQ progression, journey items) prompt for confirm. Optional auto pop after every Take.
 
 ### Archive
 Opt-in per character local record. Headers on receive, body on read. Search, category filter, Markdown export. Keeps 5000 newest. Enable in Settings > General > Archive.

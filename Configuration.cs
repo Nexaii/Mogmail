@@ -12,7 +12,6 @@ public sealed class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
 
-    public int BulkSessionCap { get; set; } = 50;
     public int MinFloorMs { get; set; } = 200;
 
     public ButtonDisplayMode ButtonDisplayMode { get; set; } = ButtonDisplayMode.Iconic;
@@ -23,8 +22,6 @@ public sealed class Configuration : IPluginConfiguration
     public bool IncludeGMInSweeps { get; set; } = false;
 
     public ClaimAction LastDeleteScope { get; set; } = ClaimAction.DeleteReadEmpty;
-
-    public bool UseLargeToolbar { get; set; } = false;
 
     public bool AutoPopAfterTake { get; set; } = false;
 
@@ -61,7 +58,6 @@ public sealed class Configuration : IPluginConfiguration
 
     public void ResetToDefaults()
     {
-        BulkSessionCap = 50;
         MinFloorMs = 200;
 
         ButtonDisplayMode = ButtonDisplayMode.Iconic;
@@ -73,7 +69,6 @@ public sealed class Configuration : IPluginConfiguration
 
         LastDeleteScope = ClaimAction.DeleteReadEmpty;
 
-        UseLargeToolbar = false;
         AutoPopAfterTake = false;
 
         PopCategoryMask = ulong.MaxValue;

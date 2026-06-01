@@ -15,8 +15,7 @@ namespace Mogmail.UI;
 
 public sealed class ToolbarWindow : Window
 {
-    private const float IconicButtonSizeSmall = 28f;
-    private const float IconicButtonSizeLarge = 32f;
+    private const float IconicButtonSize = 32f;
     private const float Gap = 5f;
     private const float VerticalOffset = 5f;
     private const long OrientationTransitionSuppressMs = 350;
@@ -34,8 +33,6 @@ public sealed class ToolbarWindow : Window
     private Vector2 _windowPos;
     private Vector2 _windowSize;
     private static long _suppressTooltipsUntilMs;
-
-    private static float IconicButtonSize() => Plugin.Config.UseLargeToolbar ? IconicButtonSizeLarge : IconicButtonSizeSmall;
 
     public ToolbarWindow(ConfirmDialog confirmDialog, TakeDeleteConfirmDialog takeDeleteConfirmDialog)
         : base("##MogmailToolbar",
@@ -122,6 +119,13 @@ public sealed class ToolbarWindow : Window
 
     public void DrawTooltipsOverlay()
     {
+        if (!DrawConditions())
+        {
+            _tooltips.Reset();
+            _buttonCenters.Clear();
+            return;
+        }
+
         if (Environment.TickCount64 < _suppressTooltipsUntilMs) return;
         foreach (var id in EnumerateButtons())
         {
@@ -165,14 +169,26 @@ public sealed class ToolbarWindow : Window
         _tooltips.TrackHover(spec.Key, ImGui.IsItemHovered());
 
         if (clicked && effective)
+        {
+            SuppressTooltipsBriefly();
             spec.OnClick();
+        }
         else if (rightClicked && effective && spec.OnRightClick != null)
+        {
+            SuppressTooltipsBriefly();
             spec.OnRightClick();
+        }
+    }
+
+    private void SuppressTooltipsBriefly()
+    {
+        _tooltips.Reset();
+        _suppressTooltipsUntilMs = Environment.TickCount64 + OrientationTransitionSuppressMs;
     }
 
     private static bool DrawIconicButton(ButtonSpec spec)
     {
-        var size = IconicButtonSize();
+        var size = IconicButtonSize;
         using (ImRaii.PushColor(ImGuiCol.Button, ButtonBg))
         using (ImRaii.PushColor(ImGuiCol.ButtonHovered, ButtonHovered))
         using (ImRaii.PushColor(ImGuiCol.ButtonActive, ButtonActive))
@@ -187,6 +203,7 @@ public sealed class ToolbarWindow : Window
     {
         yield return ButtonId.Take;
         yield return ButtonId.ReadAll;
+        yield return ButtonId.PopNow;
         yield return ButtonId.AutoPopToggle;
         yield return ButtonId.Delete;
         yield return ButtonId.CycleOrientation;
@@ -218,10 +235,17 @@ public sealed class ToolbarWindow : Window
             Theme.ColorDanger,
             "Delete all read mail.",
             OnDeleteClicked),
+        ButtonId.PopNow => new ButtonSpec(
+            "btn_popnow",
+            "Pop",
+            FontAwesomeIcon.BoxOpen,
+            Theme.ColorSuccess,
+            "Pop items now. Also: /mogmail pop",
+            OnPopNowClicked),
         ButtonId.AutoPopToggle => new ButtonSpec(
             "btn_autopop",
             Plugin.Config.AutoPopAfterTake ? "Auto Pop: On" : "Auto Pop: Off",
-            FontAwesomeIcon.BoxOpen,
+            Plugin.Config.AutoPopAfterTake ? FontAwesomeIcon.ToggleOn : FontAwesomeIcon.ToggleOff,
             Plugin.Config.AutoPopAfterTake ? Theme.ColorSuccess : Theme.ColorSubdued,
             "Toggle auto-pop. When on, registrable items in inventory are used after every Take.",
             OnAutoPopToggleClicked,
@@ -304,8 +328,7 @@ public sealed class ToolbarWindow : Window
         return n;
     }
 
-    private static float EstimateInitialWidth() =>
-        (Plugin.Config.UseLargeToolbar ? IconicButtonSizeLarge : 24f) + 20f;
+    private static float EstimateInitialWidth() => IconicButtonSize + 20f;
 
     private static unsafe AtkUnitBase* GetLetterListAddon()
     {
@@ -364,6 +387,8 @@ public sealed class ToolbarWindow : Window
         Plugin.Instance.ReadAll.Start("Read All + Delete", deleteAfter: true);
     }
 
+    private static void OnPopNowClicked() => Plugin.Instance.ArmPopInteractive("toolbar pop button");
+
     private static void OnAutoPopToggleClicked()
     {
         Plugin.Config.AutoPopAfterTake = !Plugin.Config.AutoPopAfterTake;
@@ -374,8 +399,7 @@ public sealed class ToolbarWindow : Window
     {
         var next = NextOrientation(Plugin.Config.ToolbarAttach);
         SetAttach(next);
-        _tooltips.Reset();
-        _suppressTooltipsUntilMs = Environment.TickCount64 + OrientationTransitionSuppressMs;
+        SuppressTooltipsBriefly();
     }
 
     private static ToolbarAttach NextOrientation(ToolbarAttach current) => current switch
@@ -461,7 +485,7 @@ public sealed class ToolbarWindow : Window
         };
     }
 
-    private enum ButtonId { Take, ReadAll, Delete, AutoPopToggle, CycleOrientation, Settings }
+    private enum ButtonId { Take, ReadAll, PopNow, Delete, AutoPopToggle, CycleOrientation, Settings }
 
     private readonly record struct ButtonSpec(
         string Key,

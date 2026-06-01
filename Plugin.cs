@@ -114,6 +114,8 @@ public sealed class Plugin : IDalamudPlugin
         _disposed = true;
 
         IPC.Dispose();
+        Mailbox.Dispose();
+        MailRejectionWatcher.Dispose();
         PopAddonTraceLogger.Dispose();
         UseActionDiagnosticHook.Dispose();
         MailFullPopupAutocloser.Dispose();
@@ -122,8 +124,6 @@ public sealed class Plugin : IDalamudPlugin
         PopQueue.Dispose();
         ClaimQueue.Dispose();
         Archive.Dispose();
-        MailRejectionWatcher.Dispose();
-        Mailbox.Dispose();
 
         PluginInterface.UiBuilder.Draw -= OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
@@ -203,5 +203,19 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
         PopQueue.Start(allowSensitive: false);
+    }
+
+    public void ArmPopInteractive(string reason)
+    {
+        var eligible = Services.AttachmentPopManager.CollectAllowedSensitiveInInventory();
+        if (eligible.Count > 0)
+        {
+            _sensitivePopConfirm.Show(
+                eligible,
+                onYes: () => PopQueue.Arm(reason, allowSensitive: true),
+                onNo: () => PopQueue.Arm(reason, allowSensitive: false));
+            return;
+        }
+        PopQueue.Arm(reason, allowSensitive: false);
     }
 }

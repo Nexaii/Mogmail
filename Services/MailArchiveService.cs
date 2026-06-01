@@ -24,6 +24,7 @@ public sealed unsafe class MailArchiveService : IDisposable
     };
 
     private readonly Dictionary<string, ArchiveEntry> _entries = new();
+    private readonly object _entriesLock = new();
     private ulong _loadedContentId;
 
     private readonly object _writeLock = new();
@@ -34,8 +35,22 @@ public sealed unsafe class MailArchiveService : IDisposable
     private int _dirty;
     private long _lastSaveMs;
 
-    public IReadOnlyDictionary<string, ArchiveEntry> Entries => _entries;
     public ulong LoadedContentId => _loadedContentId;
+
+    public int EntryCount
+    {
+        get { lock (_entriesLock) return _entries.Count; }
+    }
+
+    public bool TryGetEntry(string key, out ArchiveEntry entry)
+    {
+        lock (_entriesLock) return _entries.TryGetValue(key, out entry!);
+    }
+
+    public List<ArchiveEntry> SnapshotEntries()
+    {
+        lock (_entriesLock) return new List<ArchiveEntry>(_entries.Values);
+    }
 
     public MailArchiveService()
     {
@@ -71,7 +86,7 @@ public sealed unsafe class MailArchiveService : IDisposable
     public void Reset()
     {
         if (_loadedContentId == 0) return;
-        _entries.Clear();
+        lock (_entriesLock) _entries.Clear();
         MarkDirty();
         Save();
     }
@@ -79,10 +94,30 @@ public sealed unsafe class MailArchiveService : IDisposable
     public bool DeleteEntry(string key)
     {
         if (_loadedContentId == 0) return false;
-        if (!_entries.Remove(key)) return false;
+        lock (_entriesLock)
+        {
+            if (!_entries.Remove(key)) return false;
+        }
         MarkDirty();
         Save();
         return true;
+    }
+
+    public int DeleteEntries(IEnumerable<string> keys)
+    {
+        if (_loadedContentId == 0) return 0;
+        var removed = 0;
+        lock (_entriesLock)
+        {
+            foreach (var key in keys)
+            {
+                if (_entries.Remove(key)) removed++;
+            }
+        }
+        if (removed == 0) return 0;
+        MarkDirty();
+        Save();
+        return removed;
     }
 
     public string CurrentCharacterLabel()
@@ -194,7 +229,7 @@ public sealed unsafe class MailArchiveService : IDisposable
     {
         FlushIfDirty();
         WaitForPendingWrite(LogoutFlushTimeoutMs);
-        _entries.Clear();
+        lock (_entriesLock) _entries.Clear();
         _loadedContentId = 0;
     }
 
@@ -220,10 +255,13 @@ public sealed unsafe class MailArchiveService : IDisposable
         EnsureLoaded();
         if (_loadedContentId == 0) return;
         var key = MakeKey(senderContentId, timestamp);
-        if (!_entries.TryGetValue(key, out var entry)) return;
-        entry.Body = body;
-        entry.BodyCapturedUtc = DateTime.UtcNow.ToString("o");
-        entry.Read = true;
+        lock (_entriesLock)
+        {
+            if (!_entries.TryGetValue(key, out var entry)) return;
+            entry.Body = body;
+            entry.BodyCapturedUtc = DateTime.UtcNow.ToString("o");
+            entry.Read = true;
+        }
         MarkDirty();
     }
 
@@ -235,11 +273,14 @@ public sealed unsafe class MailArchiveService : IDisposable
         FlushIfDirty();
         WaitForPendingWrite(LogoutFlushTimeoutMs);
         _loadedContentId = cid;
-        _entries.Clear();
         var loaded = Load(cid);
-        if (loaded != null)
-            foreach (var entry in loaded)
-                _entries[entry.Key] = entry;
+        lock (_entriesLock)
+        {
+            _entries.Clear();
+            if (loaded != null)
+                foreach (var entry in loaded)
+                    _entries[entry.Key] = entry;
+        }
     }
 
     private void UpsertFromSnapshot(LetterSnapshot snapshot)
@@ -247,34 +288,37 @@ public sealed unsafe class MailArchiveService : IDisposable
         var key = MakeKey(snapshot.SenderContentId, snapshot.Timestamp);
         var sanitizedPreview = SanitizePreview(snapshot.Preview);
 
-        if (_entries.TryGetValue(key, out var existing))
+        lock (_entriesLock)
         {
-            existing.Read = snapshot.Read;
-            if (existing.Attachments.Count == 0 && snapshot.Attachments.Count > 0)
-                ReplaceAttachments(existing, snapshot);
-            if (existing.Gil == 0 && snapshot.Gil > 0)
-                existing.Gil = snapshot.Gil;
-            if (string.IsNullOrEmpty(existing.Preview) && !string.IsNullOrEmpty(sanitizedPreview))
-                existing.Preview = sanitizedPreview;
-            MarkDirty();
-            return;
-        }
+            if (_entries.TryGetValue(key, out var existing))
+            {
+                existing.Read = snapshot.Read;
+                if (existing.Attachments.Count == 0 && snapshot.Attachments.Count > 0)
+                    ReplaceAttachments(existing, snapshot);
+                if (existing.Gil == 0 && snapshot.Gil > 0)
+                    existing.Gil = snapshot.Gil;
+                if (string.IsNullOrEmpty(existing.Preview) && !string.IsNullOrEmpty(sanitizedPreview))
+                    existing.Preview = sanitizedPreview;
+                MarkDirty();
+                return;
+            }
 
-        var entry = new ArchiveEntry
-        {
-            Key = key,
-            SenderContentId = snapshot.SenderContentId,
-            Timestamp = snapshot.Timestamp,
-            Sender = snapshot.Sender,
-            Preview = sanitizedPreview,
-            Category = snapshot.Category,
-            Read = snapshot.Read,
-            Gil = snapshot.Gil,
-            CapturedUtc = DateTime.UtcNow.ToString("o"),
-        };
-        ReplaceAttachments(entry, snapshot);
-        _entries[key] = entry;
-        EnforceRetention();
+            var entry = new ArchiveEntry
+            {
+                Key = key,
+                SenderContentId = snapshot.SenderContentId,
+                Timestamp = snapshot.Timestamp,
+                Sender = snapshot.Sender,
+                Preview = sanitizedPreview,
+                Category = snapshot.Category,
+                Read = snapshot.Read,
+                Gil = snapshot.Gil,
+                CapturedUtc = DateTime.UtcNow.ToString("o"),
+            };
+            ReplaceAttachments(entry, snapshot);
+            _entries[key] = entry;
+            EnforceRetention();
+        }
         MarkDirty();
     }
 
@@ -299,6 +343,7 @@ public sealed unsafe class MailArchiveService : IDisposable
             entry.Attachments.Add(new ArchiveAttachment { ItemId = a.ItemId, Count = a.Count });
     }
 
+    // Caller must hold _entriesLock.
     private void EnforceRetention()
     {
         if (_entries.Count <= DefaultRetention) return;
@@ -355,7 +400,8 @@ public sealed unsafe class MailArchiveService : IDisposable
         try
         {
             path = FilePath(_loadedContentId);
-            var list = new List<ArchiveEntry>(_entries.Values);
+            List<ArchiveEntry> list;
+            lock (_entriesLock) list = new List<ArchiveEntry>(_entries.Values);
             json = JsonSerializer.Serialize(list, JsonOptions);
         }
         catch (Exception ex)

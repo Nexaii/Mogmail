@@ -57,6 +57,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private Phase _phase = Phase.ReadyToUse;
 
     private bool _armed;
+    private bool _armAllowSensitive;
     private string _armReason = "";
     private long _armStartMs;
     private long _armStillSinceMs;
@@ -108,11 +109,12 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _postConfirmGraceUntilMs = Environment.TickCount64 + PostConfirmGraceMs;
     }
 
-    public void Arm(string reason)
+    public void Arm(string reason, bool allowSensitive = false)
     {
         if (State != RunState.Idle) return;
         if (_armed) return;
         _armed = true;
+        _armAllowSensitive = allowSensitive;
         _armReason = reason;
         _armStartMs = Environment.TickCount64;
         _armStillSinceMs = 0;
@@ -124,6 +126,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     {
         if (!_armed) return;
         _armed = false;
+        _armAllowSensitive = false;
         _armReason = "";
         _armStartMs = 0;
         _armStillSinceMs = 0;
@@ -640,11 +643,74 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
         _armed = false;
         var reasonCopy = _armReason;
+        var allowSensitive = _armAllowSensitive;
+        _armAllowSensitive = false;
         _armReason = "";
         _armStartMs = 0;
         _armStillSinceMs = 0;
         MogLog.Information($"[Mogmail] pop arming gates cleared ({reasonCopy}). Starting pop.");
-        Start();
+        Start(allowSensitive);
+    }
+
+    private static bool PopHardBlocked(out string reason)
+    {
+        reason = "";
+        if (!Plugin.ClientState.IsLoggedIn) { reason = "logged out"; return true; }
+        if (Plugin.Condition[ConditionFlag.BetweenAreas]) { reason = "zoning"; return true; }
+        if (Plugin.Condition[ConditionFlag.BetweenAreas51]) { reason = "zoning"; return true; }
+        if (Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent]) { reason = "cutscene"; return true; }
+        if (Plugin.Condition[ConditionFlag.WatchingCutscene]) { reason = "cutscene"; return true; }
+        if (Plugin.Condition[ConditionFlag.WatchingCutscene78]) { reason = "cutscene"; return true; }
+        if (Plugin.Condition[ConditionFlag.InCombat]) { reason = "in combat"; return true; }
+        if (Plugin.Condition[ConditionFlag.Unconscious]) { reason = "unconscious"; return true; }
+        if (Plugin.Condition[ConditionFlag.TradeOpen]) { reason = "trading"; return true; }
+        if (Plugin.Condition[ConditionFlag.Mounted]) { reason = "mounted"; return true; }
+        if (Plugin.Condition[ConditionFlag.Mounting]) { reason = "mounting"; return true; }
+        if (Plugin.Condition[ConditionFlag.Mounting71]) { reason = "mounting"; return true; }
+        if (Plugin.Condition[ConditionFlag.MountOrOrnamentTransition]) { reason = "mounting"; return true; }
+
+        var player = Plugin.ObjectTable.LocalPlayer;
+        if (player == null) { reason = "no local player"; return true; }
+        if (player.IsDead) { reason = "dead"; return true; }
+        return false;
+    }
+
+    private static bool PopArmBusy(out string reason)
+    {
+        reason = "";
+        if (Plugin.Condition.Any(
+                ConditionFlag.Occupied,
+                ConditionFlag.Occupied30,
+                ConditionFlag.Occupied33,
+                ConditionFlag.Occupied38,
+                ConditionFlag.Occupied39,
+                ConditionFlag.OccupiedInEvent,
+                ConditionFlag.OccupiedInQuestEvent,
+                ConditionFlag.OccupiedSummoningBell))
+        { reason = "occupied"; return true; }
+        if (Plugin.Condition[ConditionFlag.Casting]) { reason = "casting"; return true; }
+        if (Plugin.Condition[ConditionFlag.Casting87]) { reason = "casting"; return true; }
+        if (Plugin.Condition.Any(
+                ConditionFlag.Crafting,
+                ConditionFlag.PreparingToCraft,
+                ConditionFlag.ExecutingCraftingAction))
+        { reason = "crafting"; return true; }
+        if (Plugin.Condition.Any(
+                ConditionFlag.Gathering,
+                ConditionFlag.ExecutingGatheringAction,
+                ConditionFlag.Fishing))
+        { reason = "gathering"; return true; }
+        if (Plugin.Condition.Any(
+                ConditionFlag.BoundByDuty,
+                ConditionFlag.BoundByDuty56,
+                ConditionFlag.BoundByDuty95,
+                ConditionFlag.WaitingForDuty,
+                ConditionFlag.InDutyQueue))
+        { reason = "duty"; return true; }
+        if (Plugin.Condition[ConditionFlag.CarryingObject]) { reason = "carrying"; return true; }
+        if (Plugin.Condition[ConditionFlag.CarryingItem]) { reason = "carrying"; return true; }
+        if (Plugin.Condition[ConditionFlag.LoggingOut]) { reason = "logging out"; return true; }
+        return false;
     }
 
     private bool ArmGatesValid(out string reason, out bool stillnessOk)
@@ -652,16 +718,10 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         reason = "";
         stillnessOk = false;
 
-        if (!Plugin.ClientState.IsLoggedIn) { reason = "logged out"; return false; }
-        if (Plugin.Condition[ConditionFlag.BetweenAreas]) { reason = "zoning"; return false; }
-        if (Plugin.Condition[ConditionFlag.BetweenAreas51]) { reason = "zoning"; return false; }
-        if (Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent]) { reason = "cutscene"; return false; }
-        if (Plugin.Condition[ConditionFlag.InCombat]) { reason = "in combat"; return false; }
-        if (Plugin.Condition[ConditionFlag.Unconscious]) { reason = "unconscious"; return false; }
+        if (PopHardBlocked(out reason)) return false;
 
         var player = Plugin.ObjectTable.LocalPlayer;
         if (player == null) { reason = "no local player"; return false; }
-        if (player.IsDead) { reason = "dead"; return false; }
 
         if (Plugin.Instance.Mailbox.IsMailboxOpen)
         {
@@ -669,6 +729,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
             reason = "mailbox open";
             return false;
         }
+
+        if (PopArmBusy(out reason)) return false;
 
         var pos = player.Position;
         var moved = Vector3.Distance(pos, _armLastPos) > ArmStillnessEpsilon;
@@ -712,16 +774,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         return Environment.TickCount64 - _lastInvokeMs < MinFloorMs;
     }
 
-    private static bool GatesValid(out string reason)
-    {
-        reason = "";
-        if (!Plugin.ClientState.IsLoggedIn) { reason = "logged out"; return false; }
-        if (Plugin.Condition[ConditionFlag.BetweenAreas]) { reason = "zoning"; return false; }
-        if (Plugin.Condition[ConditionFlag.BetweenAreas51]) { reason = "zoning"; return false; }
-        if (Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent]) { reason = "cutscene"; return false; }
-        if (Plugin.Condition[ConditionFlag.InCombat]) { reason = "in combat"; return false; }
-        return true;
-    }
+    private static bool GatesValid(out string reason) => !PopHardBlocked(out reason);
 
     private void Complete()
     {

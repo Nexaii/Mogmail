@@ -10,9 +10,16 @@ public sealed class GiftEchoService
 {
     private static readonly Regex[] Templates =
     [
+
+        // The gifter's name lives only in the letter's body text, never in a real
+        // field, so each language needs its own pattern. And you can't just flip the
+        // client language to collect them, the body comes down from the server per
+        // letter, not from a local string table. So DE/FR is on wait for real samples. 
+        // Thanks SE -_-
+        // TODO: grab DE/FR once I see real letters in those languages. Maybe someone can halp someday.
+
         new(@"^Enclosed is the following gift from your friend, (?<sender>.+?):", RegexOptions.Compiled | RegexOptions.CultureInvariant),
-        new(@"^Enclosed is the following gift from your free company member, (?<sender>.+?):", RegexOptions.Compiled | RegexOptions.CultureInvariant),
-        new(@"^Enclosed is the following gift from (?<sender>.+?):", RegexOptions.Compiled | RegexOptions.CultureInvariant),
+        new(@"^フレンドの(?<sender>.+?)から、ギフトが届きました：", RegexOptions.Compiled | RegexOptions.CultureInvariant),
     ];
 
     public void TryEmit(LetterSnapshot snapshot)

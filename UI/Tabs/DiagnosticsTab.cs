@@ -1,4 +1,3 @@
-using System;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Mogmail.UI.Helpers;
@@ -13,24 +12,10 @@ public sealed class DiagnosticsTab : ISettingsTab
 
     public void Draw()
     {
-        if (Theme.DrawSectionHeader("Bulk")) DrawBulkSection();
-        ImGui.Spacing();
-
         if (Theme.DrawSectionHeader("Plugin log file")) DrawExternalLogSection();
         ImGui.Spacing();
 
         DrawResetSection();
-    }
-
-    private static void DrawBulkSection()
-    {
-        var cap = Plugin.Config.BulkSessionCap;
-        if (SettingsRows.InputInt("Session cap", ref cap, 5, 10, inputWidth: SettingsRows.InputWidthSmall))
-        {
-            Plugin.Config.BulkSessionCap = Math.Clamp(cap, 1, 130);
-            Plugin.Config.Save();
-        }
-        Theme.HelperText("Max letters per bulk run. Clamped to 1-130.");
     }
 
     private static void DrawExternalLogSection()

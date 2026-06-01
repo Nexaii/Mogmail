@@ -13,9 +13,6 @@ public sealed class GeneralTab : ISettingsTab
         if (!ImGui.BeginChild("GeneralTabScroll", new Vector2(0, 0), true)) { ImGui.EndChild(); return; }
         try
         {
-            if (Theme.DrawSectionHeader("Toolbar")) DrawToolbarSection();
-            ImGui.Spacing();
-
             if (Theme.DrawSectionHeader("Deletion")) DrawDeletionSection();
             ImGui.Spacing();
 
@@ -30,20 +27,10 @@ public sealed class GeneralTab : ISettingsTab
         }
     }
 
-    private static void DrawToolbarSection()
-    {
-        var large = Plugin.Config.UseLargeToolbar;
-        if (SettingsRows.Checkbox("Larger buttons", ref large, "Switch toolbar buttons to the bigger 32px size."))
-        {
-            Plugin.Config.UseLargeToolbar = large;
-            Plugin.Config.Save();
-        }
-    }
-
     private static void DrawGiftEchoSection()
     {
         var enabled = Plugin.Config.EnableGiftEcho;
-        if (SettingsRows.Checkbox("Echo gift sender on Take", ref enabled, "When you claim attachments from a Purchases & Rewards gift letter, print the original gift sender and the items to local Echo chat."))
+        if (SettingsRows.Checkbox("Echo gift sender's name to chat", ref enabled, "When you claim attachments from a gift letter, print the original gift sender and the items to local echo chat."))
         {
             Plugin.Config.EnableGiftEcho = enabled;
             Plugin.Config.Save();
@@ -79,7 +66,7 @@ public sealed class GeneralTab : ISettingsTab
         }
 
         var includeGm = Plugin.Config.IncludeGMInSweeps;
-        if (SettingsRows.Checkbox("Include GM letters in sweeps", ref includeGm))
+        if (SettingsRows.Checkbox("Include GM letters", ref includeGm))
         {
             Plugin.Config.IncludeGMInSweeps = includeGm;
             Plugin.Config.Save();

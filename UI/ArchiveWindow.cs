@@ -22,9 +22,14 @@ public sealed class ArchiveWindow : Window
         ("Purchases & Rewards", 1),
     };
 
-    private string _selectedKey = "";
+    private string _focusedKey = "";
+    private readonly HashSet<string> _selected = new();
+    private string? _rangeAnchorKey;
+    private string? _dragAnchorKey;
+    private bool _dragging;
     private bool _confirmReset;
     private bool _confirmEntryDelete;
+    private bool _confirmBatchDelete;
     private string _searchFilter = "";
     private int _categoryIndex;
 
@@ -66,10 +71,13 @@ public sealed class ArchiveWindow : Window
         DrawFooter();
     }
 
-    private static void DrawFooter()
+    private void DrawFooter()
     {
-        var count = Plugin.Instance.Archive.Entries.Count;
-        ImGui.TextUnformatted($"Stored letters: {count:N0}");
+        var count = Plugin.Instance.Archive.EntryCount;
+        if (_selected.Count > 0)
+            ImGui.TextUnformatted($"Stored letters: {count:N0}  |  Selected: {_selected.Count:N0}");
+        else
+            ImGui.TextUnformatted($"Stored letters: {count:N0}");
     }
 
     private void DrawTopBar()
@@ -95,7 +103,7 @@ public sealed class ArchiveWindow : Window
         if (SettingsRows.DangerButton("Yes##archive-reset", new Vector2(80, 22)))
         {
             Plugin.Instance.Archive.Reset();
-            _selectedKey = "";
+            ClearSelection();
             _confirmReset = false;
         }
         ImGui.SameLine();
@@ -131,15 +139,7 @@ public sealed class ArchiveWindow : Window
 
         if (ImGui.BeginChild("ArchiveList", listSize, true))
         {
-            foreach (var entry in entries)
-            {
-                var label = $"{FormatTimestamp(entry.Timestamp)} - {entry.Sender}";
-                if (ImGui.Selectable($"{label}##{entry.Key}", _selectedKey == entry.Key))
-                {
-                    _selectedKey = entry.Key;
-                    _confirmEntryDelete = false;
-                }
-            }
+            DrawListEntries(entries);
             if (entries.Count == 0)
                 Theme.HelperText("No entries match the filter.");
         }
@@ -149,12 +149,107 @@ public sealed class ArchiveWindow : Window
 
         if (ImGui.BeginChild("ArchiveDetail", detailSize, true))
         {
-            if (!Plugin.Instance.Archive.Entries.TryGetValue(_selectedKey, out var selected))
-                Theme.HelperText("Pick a letter from the list to view details.");
-            else
-                DrawDetailPane(selected);
+            DrawDetailRegion();
         }
         ImGui.EndChild();
+    }
+
+    private void DrawListEntries(List<ArchiveEntry> entries)
+    {
+        var width = Math.Max(2, entries.Count.ToString().Length);
+        var format = "D" + width;
+        var io = ImGui.GetIO();
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            var number = (i + 1).ToString(format);
+            var label = $"{number}. {FormatDateShort(entry.Timestamp)} - {entry.Sender}";
+            var isSelected = _selected.Contains(entry.Key);
+
+            if (ImGui.Selectable($"{label}##{entry.Key}", isSelected))
+                HandleRowClick(entry.Key, entries, io.KeyCtrl, io.KeyShift);
+
+            if (!io.KeyShift && !io.KeyCtrl && ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
+                HandleRowDrag(entry.Key, entries);
+        }
+
+        if (_dragging && !ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            _dragging = false;
+    }
+
+    private void HandleRowClick(string key, List<ArchiveEntry> entries, bool ctrl, bool shift)
+    {
+        _confirmEntryDelete = false;
+        _confirmBatchDelete = false;
+
+        if (shift && _rangeAnchorKey != null)
+        {
+            if (SelectRange(entries, _rangeAnchorKey, key, additive: ctrl))
+            {
+                _focusedKey = key;
+                return;
+            }
+        }
+
+        if (ctrl)
+        {
+            if (!_selected.Add(key)) _selected.Remove(key);
+            _rangeAnchorKey = key;
+            _focusedKey = _selected.Contains(key) ? key : "";
+            return;
+        }
+
+        _selected.Clear();
+        _selected.Add(key);
+        _rangeAnchorKey = key;
+        _focusedKey = key;
+    }
+
+    private void HandleRowDrag(string key, List<ArchiveEntry> entries)
+    {
+        _confirmEntryDelete = false;
+        _confirmBatchDelete = false;
+
+        if (!_dragging)
+        {
+            _dragging = true;
+            _dragAnchorKey = _rangeAnchorKey ?? key;
+        }
+
+        if (_dragAnchorKey == null) return;
+        if (SelectRange(entries, _dragAnchorKey, key, additive: false))
+            _focusedKey = key;
+    }
+
+    private bool SelectRange(List<ArchiveEntry> entries, string fromKey, string toKey, bool additive)
+    {
+        var fromIndex = entries.FindIndex(e => e.Key == fromKey);
+        var toIndex = entries.FindIndex(e => e.Key == toKey);
+        if (fromIndex < 0 || toIndex < 0) return false;
+
+        var lo = Math.Min(fromIndex, toIndex);
+        var hi = Math.Max(fromIndex, toIndex);
+        if (!additive) _selected.Clear();
+        for (var i = lo; i <= hi; i++)
+            _selected.Add(entries[i].Key);
+        return true;
+    }
+
+    private void DrawDetailRegion()
+    {
+        if (_selected.Count >= 2)
+        {
+            DrawBatchPane();
+            return;
+        }
+
+        if (!Plugin.Instance.Archive.TryGetEntry(_focusedKey, out var selected))
+        {
+            Theme.HelperText("Pick a letter from the list to view details.");
+            return;
+        }
+        DrawDetailPane(selected);
     }
 
     private void DrawDetailPane(ArchiveEntry entry)
@@ -185,6 +280,79 @@ public sealed class ArchiveWindow : Window
         DrawEntryActions(entry);
     }
 
+    private void DrawBatchPane()
+    {
+        var archive = Plugin.Instance.Archive;
+        var resolved = _selected
+            .Select(k => archive.TryGetEntry(k, out var e) ? e : null)
+            .Where(e => e != null)
+            .Select(e => e!)
+            .ToList();
+
+        if (resolved.Count == 0)
+        {
+            ClearSelection();
+            Theme.HelperText("Pick a letter from the list to view details.");
+            return;
+        }
+
+        var visibleKeys = new HashSet<string>(OrderedEntries().Select(e => e.Key));
+        var hidden = resolved.Count(e => !visibleKeys.Contains(e.Key));
+
+        ImGui.TextUnformatted($"{resolved.Count:N0} letters selected");
+        if (hidden > 0)
+            Theme.HelperText($"{hidden:N0} hidden by current filter");
+
+        ImGui.Spacing();
+        var totalGil = resolved.Sum(e => (long)e.Gil);
+        var totalAttachments = resolved.Sum(e => e.Attachments.Sum(a => (long)a.Count));
+        var senderCount = resolved.Select(e => e.Sender).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var minTs = resolved.Min(e => e.Timestamp);
+        var maxTs = resolved.Max(e => e.Timestamp);
+
+        if (totalGil > 0)
+            ImGui.TextUnformatted($"Total gil: {totalGil:N0}");
+        if (totalAttachments > 0)
+            ImGui.TextUnformatted($"Total attachments: {totalAttachments:N0}");
+        ImGui.TextUnformatted($"Senders: {senderCount:N0}");
+        ImGui.TextUnformatted($"Range: {FormatDateShort(minTs)} to {FormatDateShort(maxTs)}");
+
+        ImGui.Spacing();
+        Theme.SpacingSeparator();
+
+        if (SettingsRows.PrimaryButton("Export Selected", "Save selected letters to a .md file."))
+            OpenExportSelectedDialog(resolved);
+        ImGui.SameLine();
+        if (SettingsRows.PrimaryButton("Clear Selection"))
+            ClearSelection();
+        ImGui.Spacing();
+        DrawBatchDeleteControls(resolved.Count);
+    }
+
+    private void DrawBatchDeleteControls(int count)
+    {
+        if (!_confirmBatchDelete)
+        {
+            if (SettingsRows.DangerButton("Delete Selected", "Remove all selected entries from the local archive."))
+                _confirmBatchDelete = true;
+            return;
+        }
+
+        using (ImRaii.PushColor(ImGuiCol.Text, Theme.ColorWarning))
+            ImGui.TextWrapped($"Delete {count:N0} selected entries?");
+
+        if (SettingsRows.DangerButton("Yes##batch-del", new Vector2(80, 24)))
+        {
+            var keys = _selected.ToArray();
+            Plugin.Instance.Archive.DeleteEntries(keys);
+            ClearSelection();
+            _confirmBatchDelete = false;
+        }
+        ImGui.SameLine();
+        if (SettingsRows.PrimaryButton("Cancel##batch-del", new Vector2(80, 24)))
+            _confirmBatchDelete = false;
+    }
+
     private void DrawEntryActions(ArchiveEntry entry)
     {
         if (SettingsRows.PrimaryButton("Export", "Save this single letter to a .md file."))
@@ -208,12 +376,25 @@ public sealed class ArchiveWindow : Window
         if (SettingsRows.DangerButton("Yes##entry-del", new Vector2(80, 24)))
         {
             Plugin.Instance.Archive.DeleteEntry(key);
-            _selectedKey = "";
+            _selected.Remove(key);
+            if (_focusedKey == key) _focusedKey = "";
+            if (_rangeAnchorKey == key) _rangeAnchorKey = null;
             _confirmEntryDelete = false;
         }
         ImGui.SameLine();
         if (SettingsRows.PrimaryButton("Cancel##entry-del", new Vector2(80, 24)))
             _confirmEntryDelete = false;
+    }
+
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _focusedKey = "";
+        _rangeAnchorKey = null;
+        _dragAnchorKey = null;
+        _dragging = false;
+        _confirmEntryDelete = false;
+        _confirmBatchDelete = false;
     }
 
     private static string ResolveBodyDisplay(ArchiveEntry entry)
@@ -247,7 +428,7 @@ public sealed class ArchiveWindow : Window
 
         EnsureSearchCacheCurrent();
 
-        IEnumerable<ArchiveEntry> source = Plugin.Instance.Archive.Entries.Values;
+        IEnumerable<ArchiveEntry> source = Plugin.Instance.Archive.SnapshotEntries();
         if (categoryFilter >= 0)
             source = source.Where(e => e.Category == categoryFilter);
         if (lowered.Length > 0)
@@ -257,11 +438,11 @@ public sealed class ArchiveWindow : Window
 
     private void EnsureSearchCacheCurrent()
     {
-        var entries = Plugin.Instance.Archive.Entries;
+        var entries = Plugin.Instance.Archive.SnapshotEntries();
         var characterKey = Plugin.Instance.Archive.LoadedContentId.ToString("X");
         if (_searchCacheFor == characterKey && _searchCacheEntryCount == entries.Count) return;
         _searchTextCache.Clear();
-        foreach (var entry in entries.Values)
+        foreach (var entry in entries)
             _searchTextCache[entry.Key] = BuildSearchableText(entry);
         _searchCacheFor = characterKey;
         _searchCacheEntryCount = entries.Count;
@@ -315,6 +496,23 @@ public sealed class ArchiveWindow : Window
             });
     }
 
+    private void OpenExportSelectedDialog(List<ArchiveEntry> selected)
+    {
+        var character = SanitizeFileNameComponent(Plugin.Instance.Archive.CurrentCharacterLabel());
+        var defaultName = $"mogmail-selection-{character}-{DateTime.Now:yyyy-MM-dd}-{selected.Count}entries";
+        var snapshot = selected.OrderByDescending(e => e.Timestamp).ToList();
+        Plugin.FileDialogManager.SaveFileDialog(
+            "Export Selected Letters",
+            "Markdown{.md}",
+            defaultName,
+            ".md",
+            (success, path) =>
+            {
+                if (!success || string.IsNullOrEmpty(path)) return;
+                WriteSelectedExport(snapshot, EnsureMarkdownExtension(path));
+            });
+    }
+
     private void WriteExportAll(string path)
     {
         var entries = OrderedEntries();
@@ -339,7 +537,7 @@ public sealed class ArchiveWindow : Window
 
     private void WriteSingleExport(string key, string path)
     {
-        if (!Plugin.Instance.Archive.Entries.TryGetValue(key, out var entry))
+        if (!Plugin.Instance.Archive.TryGetEntry(key, out var entry))
         {
             Plugin.Chat.Print("[Mogmail] export failed: entry not found.");
             return;
@@ -349,6 +547,25 @@ public sealed class ArchiveWindow : Window
         {
             File.WriteAllText(path, markdown);
             Plugin.Chat.Print($"[Mogmail] exported 1 entry to {path}");
+        }
+        catch (Exception ex)
+        {
+            Plugin.Chat.Print($"[Mogmail] export failed: {ex.Message}");
+        }
+    }
+
+    private void WriteSelectedExport(List<ArchiveEntry> entries, string path)
+    {
+        if (entries.Count == 0)
+        {
+            Plugin.Chat.Print("[Mogmail] no entries to export.");
+            return;
+        }
+        var markdown = Plugin.Instance.Archive.BuildMarkdownExport(entries, $"selection ({entries.Count})", LookupItemName);
+        try
+        {
+            File.WriteAllText(path, markdown);
+            Plugin.Chat.Print($"[Mogmail] exported {entries.Count} entries to {path}");
         }
         catch (Exception ex)
         {
@@ -403,6 +620,19 @@ public sealed class ArchiveWindow : Window
         {
             var dt = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).LocalDateTime;
             return dt.ToString("yyyy-MM-dd HH:mm");
+        }
+        catch
+        {
+            return epochSeconds.ToString();
+        }
+    }
+
+    private static string FormatDateShort(uint epochSeconds)
+    {
+        try
+        {
+            var dt = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).LocalDateTime;
+            return dt.ToString("dd/MM/yy HH:mm");
         }
         catch
         {

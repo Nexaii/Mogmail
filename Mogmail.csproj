@@ -2,8 +2,8 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Authors>Nexai</Authors>
-    <Version>1.2.0.0</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <Version>1.2.1.0</Version>
+    <AssemblyVersion>1.2.1.0</AssemblyVersion>
     <Description>A better mail service with bulk attachment claiming, bulk delete, and inventory pop tools.</Description>
     <PackageProjectUrl>https://github.com/Nexaii/Mogmail</PackageProjectUrl>
     <OutputType>Library</OutputType>

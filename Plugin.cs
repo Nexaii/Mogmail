@@ -106,6 +106,8 @@ public sealed class Plugin : IDalamudPlugin
         });
 
         Log.Info("[Mogmail] loaded");
+
+        Migration.RepoMigrator.Run();
     }
 
     public void Dispose()

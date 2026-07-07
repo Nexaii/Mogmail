@@ -10,13 +10,13 @@ namespace Mogmail.UI;
 
 public sealed class SettingsWindow : Window
 {
-    private const string KoFiUrl = "https://ko-fi.com/nexai";
+    private const string PatreonUrl = "https://www.patreon.com/cw/Nexairi";
     private const float FrameRounding = 6f;
     private const float FrameBorderSize = 1f;
     private const float ChildRounding = 6f;
 
     private readonly ISettingsTab[] _tabs;
-    private readonly TitleBarButton _kofiButton;
+    private readonly TitleBarButton _patreonButton;
 
     public SettingsWindow() : base("Mogmail##MogmailSettings")
     {
@@ -35,17 +35,17 @@ public sealed class SettingsWindow : Window
             new DiagnosticsTab(),
         ];
 
-        _kofiButton = new TitleBarButton
+        _patreonButton = new TitleBarButton
         {
             Icon = FontAwesomeIcon.Heart,
-            ShowTooltip = () => ImGui.SetTooltip("Support on Ko-Fi"),
+            ShowTooltip = () => ImGui.SetTooltip("Support on Patreon"),
             Priority = int.MinValue,
             IconOffset = new Vector2(1.5f, 1),
-            Click = _ => OpenKoFiLink(),
+            Click = _ => OpenPatreonLink(),
             AvailableClickthrough = true,
         };
 
-        TitleBarButtons.Add(_kofiButton);
+        TitleBarButtons.Add(_patreonButton);
     }
 
     public override void Draw()
@@ -70,13 +70,13 @@ public sealed class SettingsWindow : Window
         ImGui.EndTabBar();
     }
 
-    private static void OpenKoFiLink()
+    private static void OpenPatreonLink()
     {
         try
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = KoFiUrl,
+                FileName = PatreonUrl,
                 UseShellExecute = true,
                 Verb = string.Empty,
             });

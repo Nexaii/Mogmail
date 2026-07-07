@@ -55,7 +55,8 @@ public sealed class ToolbarWindow : Window
     public override unsafe bool DrawConditions()
     {
         var addon = GetLetterListAddon();
-        return addon != null && addon->IsVisible;
+        if (addon == null || !addon->IsVisible) return false;
+        return !IsLetterEditorVisible();
     }
 
     public override void PreDraw()
@@ -333,6 +334,12 @@ public sealed class ToolbarWindow : Window
     private static unsafe AtkUnitBase* GetLetterListAddon()
     {
         return Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterList, 1);
+    }
+
+    private static unsafe bool IsLetterEditorVisible()
+    {
+        var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(AddonNames.LetterEditor, 1);
+        return addon != null && addon->IsVisible;
     }
 
     private static void OnTakeClicked()

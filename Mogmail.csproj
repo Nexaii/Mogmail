@@ -2,8 +2,8 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Authors>Nexai</Authors>
-    <Version>1.2.2.0</Version>
-    <AssemblyVersion>1.2.2.0</AssemblyVersion>
+    <Version>1.2.3.0</Version>
+    <AssemblyVersion>1.2.3.0</AssemblyVersion>
     <Description>A better mail service with bulk attachment claiming, bulk delete, and inventory pop tools.</Description>
     <PackageProjectUrl>https://github.com/Nexaii/Mogmail</PackageProjectUrl>
     <OutputType>Library</OutputType>
@@ -23,10 +23,4 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-
-  <Target Name="PackageRelease" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
-    <MakeDir Directories="$(ProjectDir)releases" />
-    <ZipDirectory SourceDirectory="$(OutputPath)" DestinationFile="$(ProjectDir)releases\$(AssemblyName).zip" Overwrite="true" />
-    <Message Importance="High" Text="Release ZIP created: releases\$(AssemblyName).zip" />
-  </Target>
 </Project>

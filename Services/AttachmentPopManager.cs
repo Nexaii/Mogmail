@@ -76,6 +76,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private bool _pendingWasUnlocked;
 #if DEBUG
     private long _lastDiagLogMs;
+    private uint _lastHoldTraceItem;
+    private HoldReason _lastHoldTraceReason = HoldReason.None;
 #endif
     private long _lastSuccessMs;
     private long _lastUseActionTrueFireMs;
@@ -316,13 +318,13 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         var now = Environment.TickCount64;
         if (now < _postConfirmGraceUntilMs)
         {
-            TraceDiag(() => $"hold {GetItemName(head)} (#{head}): post-confirm grace {_postConfirmGraceUntilMs - now}ms");
+            TraceHold(head, HoldReason.PostConfirmGrace, _postConfirmGraceUntilMs - now);
             return false;
         }
 
         if (_lastSuccessMs > 0 && now - _lastSuccessMs < PostSuccessCooldownMs)
         {
-            TraceDiag(() => $"hold {GetItemName(head)} (#{head}): post-success cooldown {PostSuccessCooldownMs - (now - _lastSuccessMs)}ms");
+            TraceHold(head, HoldReason.PostSuccessCooldown, PostSuccessCooldownMs - (now - _lastSuccessMs));
             return false;
         }
 
@@ -528,6 +530,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _pendingWasUnlocked = false;
         _lastSuccessMs = Environment.TickCount64;
         _silentRefireCount = 0;
+        ResetHoldTrace();
     }
 
     private static bool IsBaseUnlockedNow(uint baseId)
@@ -554,6 +557,39 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     {
 #if DEBUG
         MogLog.Information($"[Mogmail][trace] {msg()}");
+#endif
+    }
+
+    private enum HoldReason
+    {
+        None,
+        PostConfirmGrace,
+        PostSuccessCooldown,
+    }
+
+    private void TraceHold(uint head, HoldReason reason, long remainingMs)
+    {
+#if DEBUG
+        if (!Plugin.Config.PopTraceEveryFrame)
+        {
+            if (_lastHoldTraceItem == head && _lastHoldTraceReason == reason) return;
+        }
+        _lastHoldTraceItem = head;
+        _lastHoldTraceReason = reason;
+        var label = reason == HoldReason.PostConfirmGrace ? "post-confirm grace" : "post-success cooldown";
+        MogLog.Information($"[Mogmail][trace] hold {GetItemName(head)} (#{head}): {label} {remainingMs}ms");
+#else
+        _ = head;
+        _ = reason;
+        _ = remainingMs;
+#endif
+    }
+
+    private void ResetHoldTrace()
+    {
+#if DEBUG
+        _lastHoldTraceItem = 0;
+        _lastHoldTraceReason = HoldReason.None;
 #endif
     }
 

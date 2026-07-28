@@ -35,6 +35,8 @@ public sealed class Configuration : IPluginConfiguration
     public bool EnableExternalLogFile { get; set; } = false;
     public string ExternalLogFilePath { get; set; } = "";
 
+    public bool PopTraceEveryFrame { get; set; } = false;
+
     public bool EnableGiftEcho { get; set; } = false;
     public bool EnableArchive { get; set; } = false;
 
@@ -77,6 +79,7 @@ public sealed class Configuration : IPluginConfiguration
         AllowOneHerosJourneyInPop = false;
         AllowOneRetainersJourneyInPop = false;
 
+        PopTraceEveryFrame = false;
         EnableExternalLogFile = false;
         ExternalLogFilePath = "";
 

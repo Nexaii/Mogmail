@@ -45,7 +45,7 @@ public sealed class HoverTooltipDrawer
         var pos = anchor + offset;
 
         ImGui.SetNextWindowPos(pos, ImGuiCond.Always, pivot);
-        ImGui.SetNextWindowSizeConstraints(new Vector2(fixedWidth, 0), new Vector2(fixedWidth, float.MaxValue));
+        ImGui.SetNextWindowSizeConstraints(new Vector2(0f, 0f), new Vector2(fixedWidth, float.MaxValue));
         ImGui.SetNextWindowBgAlpha(alpha);
 
         var flags = ImGuiWindowFlags.NoTitleBar

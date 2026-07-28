@@ -11,6 +11,18 @@ public sealed class PopTab : ISettingsTab
 {
     private static readonly PopCategory[] AllCategories = (PopCategory[])Enum.GetValues(typeof(PopCategory));
 
+    private static readonly PopCategory[] DisplayOrder = SortedByLabel();
+
+    private static PopCategory[] SortedByLabel()
+    {
+        var ordered = (PopCategory[])AllCategories.Clone();
+        Array.Sort(ordered, (a, b) => string.Compare(
+            ItemRegistryClassifier.CategoryLabel(a),
+            ItemRegistryClassifier.CategoryLabel(b),
+            StringComparison.OrdinalIgnoreCase));
+        return ordered;
+    }
+
     private static readonly (string Label, Func<bool> Get, Action<bool> Set)[] SensitiveToggles =
     {
         ("Allow: Phial of Fantasia",            () => Plugin.Config.AllowFantasiaInPop,            v => Plugin.Config.AllowFantasiaInPop = v),
@@ -115,7 +127,7 @@ public sealed class PopTab : ISettingsTab
         using var table = ImRaii.Table("MogmailPopCategoryGrid", 2, flags);
         if (!table) return;
 
-        foreach (var category in AllCategories)
+        foreach (var category in DisplayOrder)
         {
             ImGui.TableNextColumn();
             var enabled = Plugin.Config.IsPopCategoryEnabled(category);
@@ -125,6 +137,12 @@ public sealed class PopTab : ISettingsTab
                 Plugin.Config.SetPopCategoryEnabled(category, enabled);
                 Plugin.Config.Save();
             }
+
+            var tooltip = ItemRegistryClassifier.CategoryTooltip(category);
+            if (tooltip.Length == 0) continue;
+            ImGui.SameLine(0f, ImGui.GetStyle().ItemInnerSpacing.X);
+            ImGui.TextDisabled("(?)");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
         }
     }
 }

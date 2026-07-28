@@ -20,7 +20,6 @@ public enum PopCategory
     CompanySealVouchers = 12,
     OccultRecords = 13,
     SoulShards = 14,
-    StarContributorCertificate = 15,
 }
 
 public static class ItemRegistryClassifier
@@ -62,7 +61,7 @@ public static class ItemRegistryClassifier
         PopCategory.Barding => "Bardings",
         PopCategory.Mount => "Mounts",
         PopCategory.SecretRecipeBook => "Master Recipe Books",
-        PopCategory.UnlockLink => "Hairstyles / Emotes / Riding Maps (UnlockLink)",
+        PopCategory.UnlockLink => "Unlock Items",
         PopCategory.TripleTriadCard => "Triple Triad Cards",
         PopCategory.FolkloreTome => "Folklore Tomes",
         PopCategory.FieldNotes => "Bozjan Field Notes",
@@ -73,8 +72,13 @@ public static class ItemRegistryClassifier
         PopCategory.CompanySealVouchers => "Company Seal Vouchers",
         PopCategory.OccultRecords => "Occult Records",
         PopCategory.SoulShards => "Phantom Soul Shards",
-        PopCategory.StarContributorCertificate => "Star Contributor Certificates",
         _ => category.ToString(),
+    };
+
+    public static string CategoryTooltip(PopCategory category) => category switch
+    {
+        PopCategory.UnlockLink => "Emotes, hairstyles, and riding maps.",
+        _ => string.Empty,
     };
 
     private static bool TryMapActionType(uint actionType, out PopCategory category)
@@ -96,7 +100,6 @@ public static class ItemRegistryClassifier
             case 41120: category = PopCategory.CompanySealVouchers; return true;
             case 43141: category = PopCategory.OccultRecords; return true;
             case 43142: category = PopCategory.SoulShards; return true;
-            case 45189: category = PopCategory.StarContributorCertificate; return true;
             default: category = default; return false;
         }
     }

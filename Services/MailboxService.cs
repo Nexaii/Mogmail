@@ -27,7 +27,7 @@ public sealed unsafe class MailboxService : IDisposable
         "40 55 41 54 41 57 48 81 EC B0 0F 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 83 B9 00 76 00 00 00";
 
     private const string AddDataSignature =
-        "53 55 56 57 41 54 48 83 EC 40 48 8B D9 45 8B E0 48 8B 49 08 48 8B EA 48 8B 01 FF 50 40";
+        "40 53 55 56 57 41 54 48 83 EC 40 48 8B D9 45 8B E0 48 8B 49 08 48 8B EA 48 8B 01 FF 50 40";
 
     private const string HandleLetterDetailResponseSignature =
         "48 89 5C 24 18 56 41 56 41 57 48 83 EC 30 8B 81 00 76 00 00 48 8B DA 48 8B F1";

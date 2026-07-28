@@ -15,8 +15,25 @@ public sealed class DiagnosticsTab : ISettingsTab
         if (Theme.DrawSectionHeader("Plugin log file")) DrawExternalLogSection();
         ImGui.Spacing();
 
+#if DEBUG
+        if (Theme.DrawSectionHeader("Pop tracing")) DrawPopTraceSection();
+        ImGui.Spacing();
+#endif
+
         DrawResetSection();
     }
+
+#if DEBUG
+    private static void DrawPopTraceSection()
+    {
+        var everyFrame = Plugin.Config.PopTraceEveryFrame;
+        if (SettingsRows.Checkbox("Log pop holds every frame", ref everyFrame))
+        {
+            Plugin.Config.PopTraceEveryFrame = everyFrame;
+            Plugin.Config.Save();
+        }
+    }
+#endif
 
     private static void DrawExternalLogSection()
     {

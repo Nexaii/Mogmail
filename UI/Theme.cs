@@ -14,11 +14,6 @@ public static class Theme
     public static readonly Vector4 ColorAccent = new(0.40f, 0.65f, 0.95f, 1.0f);
 
     public const float ToolbarBgAlpha = 0.85f;
-    public const float TooltipBgAlpha = 0.85f;
-    public const float TooltipAnimMs = 150f;
-    public const float TooltipExitAnimMs = 100f;
-    public const float TooltipWidth = 260f;
-    public const float TooltipEdgeOffset = 10f;
 
     public static bool DrawSectionHeader(string label)
     {

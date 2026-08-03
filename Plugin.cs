@@ -141,7 +141,6 @@ public sealed class Plugin : IDalamudPlugin
     private void OnDraw()
     {
         _windowSystem.Draw();
-        _toolbarWindow.DrawTooltipsOverlay();
         FileDialogManager.Draw();
     }
 

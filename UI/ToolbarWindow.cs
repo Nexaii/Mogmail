@@ -18,6 +18,7 @@ public sealed class ToolbarWindow : Window
     private const float IconicButtonSize = 32f;
     private const float Gap = 5f;
     private const float VerticalOffset = 5f;
+    private const float TooltipMargin = 5f;
     private const long OrientationTransitionSuppressMs = 350;
 
     private static readonly Vector4 ButtonBg = new(0f, 0f, 0f, 0.67f);
@@ -25,13 +26,12 @@ public sealed class ToolbarWindow : Window
     private static readonly Vector4 ButtonActive = new(0.35f, 0.35f, 0.40f, 1.0f);
     private static readonly Vector4 TransparentColor = new(0f, 0f, 0f, 0f);
 
-    private readonly HoverTooltipDrawer _tooltips = new();
     private readonly ConfirmDialog _confirmDialog;
     private readonly TakeDeleteConfirmDialog _takeDeleteConfirmDialog;
-    private readonly Dictionary<string, Vector2> _buttonCenters = new();
 
     private Vector2 _windowPos;
     private Vector2 _windowSize;
+    private Vector2 _userWindowPadding;
     private static long _suppressTooltipsUntilMs;
 
     public ToolbarWindow(ConfirmDialog confirmDialog, TakeDeleteConfirmDialog takeDeleteConfirmDialog)
@@ -96,6 +96,7 @@ public sealed class ToolbarWindow : Window
 
     private void PushWindowStyle()
     {
+        _userWindowPadding = ImGui.GetStyle().WindowPadding;
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2f, 2f));
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(4f, 4f));
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0f);
@@ -118,37 +119,6 @@ public sealed class ToolbarWindow : Window
         DrawVertical(ComputeEnabled());
     }
 
-    public void DrawTooltipsOverlay()
-    {
-        if (!DrawConditions())
-        {
-            _tooltips.Reset();
-            _buttonCenters.Clear();
-            return;
-        }
-
-        if (Environment.TickCount64 < _suppressTooltipsUntilMs) return;
-        foreach (var id in EnumerateButtons())
-        {
-            var spec = GetButtonSpec(id);
-            if (!_buttonCenters.TryGetValue(spec.Key, out var center)) continue;
-            var (anchor, pivot, side) = ComputeTooltipAnchor(center);
-            _tooltips.DrawTooltip(spec.Key, spec.Label, spec.Description, anchor, pivot, side, Theme.TooltipWidth);
-        }
-    }
-
-    private (Vector2 Anchor, Vector2 Pivot, TooltipSide Side) ComputeTooltipAnchor(Vector2 buttonCenter)
-    {
-        var attach = EffectiveAttach();
-        return attach == ToolbarAttach.SnappedRight
-            ? (new Vector2(_windowPos.X + _windowSize.X + Theme.TooltipEdgeOffset, buttonCenter.Y),
-               new Vector2(0f, 0.5f),
-               TooltipSide.Right)
-            : (new Vector2(_windowPos.X - Theme.TooltipEdgeOffset, buttonCenter.Y),
-               new Vector2(1f, 0.5f),
-               TooltipSide.Left);
-    }
-
     private void DrawVertical(bool enabled)
     {
         foreach (var id in EnumerateButtons())
@@ -161,13 +131,11 @@ public sealed class ToolbarWindow : Window
         var effective = enabled || spec.AlwaysEnabled;
         using var disabled = ImRaii.Disabled(!effective);
 
-        var startPos = ImGui.GetCursorScreenPos();
         var clicked = DrawIconicButton(spec);
         var rightClicked = ImGui.IsItemClicked(ImGuiMouseButton.Right);
 
-        var center = startPos + ImGui.GetItemRectSize() * 0.5f;
-        _buttonCenters[spec.Key] = center;
-        _tooltips.TrackHover(spec.Key, ImGui.IsItemHovered());
+        if (ImGui.IsItemHovered() && Environment.TickCount64 >= _suppressTooltipsUntilMs)
+            DrawPinnedTooltip(spec);
 
         if (clicked && effective)
         {
@@ -181,9 +149,30 @@ public sealed class ToolbarWindow : Window
         }
     }
 
-    private void SuppressTooltipsBriefly()
+    private void DrawPinnedTooltip(ButtonSpec spec)
     {
-        _tooltips.Reset();
+        var itemMin = ImGui.GetItemRectMin();
+        var itemMax = ImGui.GetItemRectMax();
+        var centerY = (itemMin.Y + itemMax.Y) * 0.5f;
+        var toRight = EffectiveAttach() == ToolbarAttach.SnappedRight;
+
+        var anchor = toRight
+            ? new Vector2(itemMax.X + TooltipMargin, centerY)
+            : new Vector2(itemMin.X - TooltipMargin, centerY);
+        var pivot = toRight ? new Vector2(0f, 0.5f) : new Vector2(1f, 0.5f);
+
+        ImGui.SetNextWindowPos(anchor, ImGuiCond.Always, pivot);
+        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, _userWindowPadding))
+        using (ImRaii.Tooltip())
+        {
+            ImGui.TextUnformatted(spec.Label);
+            using (ImRaii.PushColor(ImGuiCol.Text, Theme.ColorSubdued))
+                ImGui.TextUnformatted(spec.Description);
+        }
+    }
+
+    private static void SuppressTooltipsBriefly()
+    {
         _suppressTooltipsUntilMs = Environment.TickCount64 + OrientationTransitionSuppressMs;
     }
 
@@ -218,7 +207,7 @@ public sealed class ToolbarWindow : Window
             "Take",
             FontAwesomeIcon.EnvelopeOpenText,
             Theme.ColorSuccess,
-            "Left-click: Claim attachments. Right-click: Claim then delete.",
+            "Left-click: Claim attachments.\nRight-click: Claim then delete.",
             OnTakeClicked,
             OnRightClick: OnTakeAndDeleteClicked),
         ButtonId.ReadAll => new ButtonSpec(
@@ -226,7 +215,7 @@ public sealed class ToolbarWindow : Window
             "Read All",
             FontAwesomeIcon.EnvelopeOpen,
             Theme.ColorAccent,
-            "Left-click: Mark all as read. Right-click: Mark all as read then delete.",
+            "Left-click: Mark all as read.\nRight-click: Mark all as read then delete.",
             OnReadAllClicked,
             OnRightClick: OnReadAllAndDeleteClicked),
         ButtonId.Delete => new ButtonSpec(
@@ -248,7 +237,7 @@ public sealed class ToolbarWindow : Window
             Plugin.Config.AutoPopAfterTake ? "Auto Pop: On" : "Auto Pop: Off",
             Plugin.Config.AutoPopAfterTake ? FontAwesomeIcon.ToggleOn : FontAwesomeIcon.ToggleOff,
             Plugin.Config.AutoPopAfterTake ? Theme.ColorSuccess : Theme.ColorSubdued,
-            "Toggle auto-pop. When on, registrable items in inventory are used after every Take.",
+            "Automatically pop items after Take.",
             OnAutoPopToggleClicked,
             AlwaysEnabled: true),
         ButtonId.CycleOrientation => new ButtonSpec(

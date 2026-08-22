@@ -32,12 +32,14 @@ public sealed unsafe class PopAddonTraceLogger : IDisposable
 #if DEBUG
     private static void OnSetup(AddonEvent type, AddonArgs args)
     {
+        if (Plugin.Instance.PopQueue.IsIdle) return;
         var prompt = ReadPrompt(args);
         MogLog.Information($"[Mogmail][diag] addon PostSetup {args.AddonName} prompt=\"{Truncate(prompt, 120)}\"");
     }
 
     private static void OnFinalize(AddonEvent type, AddonArgs args)
     {
+        if (Plugin.Instance.PopQueue.IsIdle) return;
         MogLog.Information($"[Mogmail][diag] addon PreFinalize {args.AddonName}");
     }
 

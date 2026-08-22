@@ -32,6 +32,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private const long SilentFailureRefireMs = 5000;
     private const int MaxSilentRefires = 3;
 
+    private static readonly HashSet<uint> PermanentRejectStatuses = new() { 583 };
+
     private static readonly InventoryType[] PlayerBags =
     {
         InventoryType.Inventory1,
@@ -65,6 +67,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private long _lastMailboxCloseAttemptMs;
     private int _consecutiveSkips;
     private uint _waitingItemId;
+    private uint _snapshotItemId;
     private long _waitingSinceMs;
     private uint _waitingLastStatus;
     private int _waitingPreCount;
@@ -362,6 +365,18 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         if (status == 0)
             return true;
 
+        if (PermanentRejectStatuses.Contains(status))
+        {
+            _itemQueue.Dequeue();
+            _useActionRetries.Remove(head);
+            MogLog.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}): already unlocked or cannot use (GetActionStatus={status}).");
+            Skipped++;
+            _consecutiveSkips++;
+            ResetWaitingState();
+            CheckConsecutiveSkipAbort();
+            return false;
+        }
+
         if (_waitingItemId != head)
         {
             _waitingItemId = head;
@@ -390,7 +405,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
     private void EnsureHeadSnapshot(uint head)
     {
-        if (_waitingItemId == head && _waitingPreCount > 0) return;
+        if (_snapshotItemId == head) return;
+        _snapshotItemId = head;
         _waitingPreCount = GetItemCount(head);
         var (baseId, _) = ItemUtil.GetBaseId(head);
         _waitingBaseId = baseId;
@@ -421,6 +437,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
     private void ResetWaitingState()
     {
         _waitingItemId = 0;
+        _snapshotItemId = 0;
         _waitingSinceMs = 0;
         _waitingLastStatus = 0;
         _waitingPreCount = 0;

@@ -7,7 +7,7 @@ namespace Mogmail.Services;
 
 public sealed unsafe class PopConfirmAutoclicker : IDisposable
 {
-    private const string SelectYesNoAddon = "SelectYesNo";
+    private const string SelectYesNoAddon = "SelectYesno";
     private const int YesCallbackCase = 0;
     private const int PostUseActionWindowMs = 1000;
 
@@ -31,10 +31,7 @@ public sealed unsafe class PopConfirmAutoclicker : IDisposable
         try
         {
             if (!Plugin.Instance.PopQueue.IsInPostUseActionWindow(PostUseActionWindowMs))
-            {
-                MogLog.Information("[Mogmail] pop autoclicker: skipped, outside post-UseAction window.");
                 return;
-            }
 
             if (TryFindVisibleDestructiveAddon(out var blockingAddon))
             {

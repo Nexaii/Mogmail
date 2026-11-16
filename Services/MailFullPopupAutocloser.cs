@@ -3,6 +3,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -36,11 +37,11 @@ public sealed unsafe class MailFullPopupAutocloser : IDisposable
             FireOkCallback((AtkUnitBase*)addon);
             if (fromPop) Plugin.Instance.PopQueue.NotifyConfirmFired();
             var source = fromMailbox ? "mail-full" : "pop";
-            MogLog.Information($"[Mogmail] {source} SelectOk auto-dismissed. Prompt: \"{Truncate(prompt, 140)}\"");
+            Log.Info($"[Mogmail] {source} SelectOk auto-dismissed. Prompt: \"{Truncate(prompt, 140)}\"");
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] MailFullPopupAutocloser exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] MailFullPopupAutocloser exception: {ex}"); } catch { }
         }
     }
 

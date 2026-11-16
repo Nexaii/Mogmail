@@ -7,6 +7,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Mogmail.Constants;
+using Mogmail.Diagnostics;
 #endif
 
 namespace Mogmail.Services;
@@ -35,13 +36,13 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         var address = (nint)ActionManager.MemberFunctionPointers.UseAction;
         if (address == 0)
         {
-            MogLog.Warning("[Mogmail] UseAction address not resolved. Diagnostic hook disabled.");
+            Log.Warning("[Mogmail] UseAction address not resolved. Diagnostic hook disabled.");
             return;
         }
         _hook = Plugin.GameInteropProvider.HookFromAddress<ActionManager.Delegates.UseAction>(address, Detour);
         _hook.Enable();
         Plugin.Framework.Update += Tick;
-        MogLog.Information($"[Mogmail] UseAction diagnostic hook installed at 0x{address:X}.");
+        Log.Info($"[Mogmail] UseAction diagnostic hook installed at 0x{address:X}.");
 #endif
     }
 
@@ -63,7 +64,7 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         if (actionType != ActionType.Item) return rc;
 
         var now = Environment.TickCount64;
-        MogLog.Information(
+        Log.Info(
             $"[Mogmail][diag] UseAction fire type={actionType} id={actionId} extra={extraParam:X} mode={mode} rc={rc} anim={mgr->AnimationLock:F2}s queued={mgr->ActionQueued} casting={Plugin.Condition[ConditionFlag.Casting]} addons=[{ListBlockingAddons()}]");
 
         _pendingSamples.Add(new PendingSample
@@ -107,7 +108,7 @@ public sealed unsafe class UseActionDiagnosticHook : IDisposable
         var occupied = Plugin.Condition[ConditionFlag.OccupiedInEvent];
         var addons = ListBlockingAddons();
 
-        MogLog.Information(
+        Log.Info(
             $"[Mogmail][diag] +{elapsed}ms type={s.ActionType} id={s.ActionId} rc0={s.ReturnValue} anim={anim:F2}s queued={queued} casting={casting} occupied={occupied} status={status} addons=[{addons}]");
     }
 

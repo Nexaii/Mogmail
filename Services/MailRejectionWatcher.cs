@@ -4,6 +4,7 @@ using Dalamud.Game;
 using Dalamud.Game.Chat;
 using Dalamud.Plugin.Services;
 using Lumina.Excel.Sheets;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -44,7 +45,7 @@ public sealed class MailRejectionWatcher : IDisposable
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] MailRejectionWatcher exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] MailRejectionWatcher exception: {ex}"); } catch { }
         }
     }
 
@@ -54,7 +55,7 @@ public sealed class MailRejectionWatcher : IDisposable
         var sheet = Plugin.Data.GetExcelSheet<LogMessage>(ClientLanguage.English);
         if (sheet == null)
         {
-            MogLog.Warning("[Mogmail] mail rejection watcher: English LogMessage sheet unavailable. Rejection detection disabled.");
+            Log.Warning("[Mogmail] mail rejection watcher: English LogMessage sheet unavailable. Rejection detection disabled.");
             return map;
         }
 
@@ -72,7 +73,7 @@ public sealed class MailRejectionWatcher : IDisposable
         }
 
         if (map.Count == 0)
-            MogLog.Warning("[Mogmail] mail rejection watcher: zero rejection LogMessage rows identified. Patterns may have changed.");
+            Log.Warning("[Mogmail] mail rejection watcher: zero rejection LogMessage rows identified. Patterns may have changed.");
 
         return map;
     }

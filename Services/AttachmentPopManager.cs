@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using Mogmail.Constants;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -124,7 +125,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _armStartMs = Environment.TickCount64;
         _armStillSinceMs = 0;
         _armLastPos = Plugin.ObjectTable.LocalPlayer?.Position ?? Vector3.Zero;
-        MogLog.Information($"[Mogmail] pop armed ({reason}). Waiting for mailbox close + stillness.");
+        Log.Info($"[Mogmail] pop armed ({reason}). Waiting for mailbox close + stillness.");
     }
 
     public void Disarm(string reason)
@@ -135,20 +136,20 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _armReason = "";
         _armStartMs = 0;
         _armStillSinceMs = 0;
-        MogLog.Information($"[Mogmail] pop disarmed: {reason}.");
+        Log.Info($"[Mogmail] pop disarmed: {reason}.");
     }
 
     public void Start(bool allowSensitive = false)
     {
         if (State != RunState.Idle)
         {
-            Plugin.Chat.Print("[Mogmail] pop already running.");
+            Common.Chat.Warn("pop already running.");
             return;
         }
 
         if (!Plugin.ClientState.IsLoggedIn)
         {
-            Plugin.Chat.Print("[Mogmail] pop requires login.");
+            Common.Chat.Warn("pop requires login.");
             return;
         }
 
@@ -162,11 +163,11 @@ public sealed unsafe class AttachmentPopManager : IDisposable
                 (0, _) => $"all {skippedDisabled} registrable items are in disabled categories.",
                 _ => $"{skippedUnlocked} already unlocked, {skippedDisabled} in disabled categories.",
             };
-            Plugin.Chat.Print($"[Mogmail] pop: {detail}");
+            Common.Chat.Result($"pop: {detail}");
             return;
         }
         if (skippedUnlocked > 0 || skippedDisabled > 0)
-            MogLog.Information($"[Mogmail] pop scan: {items.Count} queued, {skippedUnlocked} already unlocked, {skippedDisabled} category-disabled.");
+            Log.Info($"[Mogmail] pop scan: {items.Count} queued, {skippedUnlocked} already unlocked, {skippedDisabled} category-disabled.");
 
         _itemQueue.Clear();
         foreach (var id in items) _itemQueue.Enqueue(id);
@@ -181,15 +182,15 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         ResetWaitingState();
         State = RunState.Running;
 
-        MogLog.Information($"[Mogmail] pop started. {Total} items.");
-        Plugin.Chat.Print($"[Mogmail] pop started. {Total} items.");
+        Log.Info($"[Mogmail] pop started. {Total} items.");
+        Common.Chat.Result($"pop started. {Total} items.");
     }
 
     public void Abort(string reason)
     {
         if (State == RunState.Idle) return;
-        MogLog.Information($"[Mogmail] pop aborted: {reason}. processed={Processed} skipped={Skipped}");
-        Plugin.Chat.Print($"[Mogmail] pop aborted ({reason}). {Processed} done, {Skipped} skipped.");
+        Log.Info($"[Mogmail] pop aborted: {reason}. processed={Processed} skipped={Skipped}");
+        Common.Chat.Warn($"pop aborted ({reason}). {Processed} done, {Skipped} skipped.");
         FinishRun();
     }
 
@@ -217,7 +218,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] pop tick exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] pop tick exception: {ex}"); } catch { }
             try
             {
                 if (State != RunState.Idle) Abort("tick exception");
@@ -266,10 +267,9 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         var head = _itemQueue.Peek();
         if (InvokeUse(head))
         {
-            _itemQueue.Dequeue();
-            _useActionRetries.Remove(head);
+            DequeueHead();
         }
-        else
+        else if (!Plugin.Condition[ConditionFlag.Casting])
         {
             HandleUseActionFailure(head);
         }
@@ -282,9 +282,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _useActionRetries[itemId] = n;
         if (n >= MaxUseActionRetries)
         {
-            _itemQueue.Dequeue();
-            _useActionRetries.Remove(itemId);
-            MogLog.Warning($"[Mogmail] pop skip {GetItemName(itemId)} (#{itemId}) after {MaxUseActionRetries} UseAction failures.");
+            DequeueHead();
+            Log.Warning($"[Mogmail] pop skip {GetItemName(itemId)} (#{itemId}) after {MaxUseActionRetries} UseAction failures.");
             Skipped++;
             _consecutiveSkips++;
             CheckConsecutiveSkipAbort();
@@ -300,14 +299,12 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
         if (DetectPassiveHeadCompletion(head, out var passiveReason))
         {
-            _itemQueue.Dequeue();
-            _useActionRetries.Remove(head);
-            MogLog.Information($"[Mogmail] pop ok {GetItemName(head)} (#{head}): {passiveReason} (no ack phase).");
+            DequeueHead();
+            Log.Info($"[Mogmail] pop ok {GetItemName(head)} (#{head}): {passiveReason} (no ack phase).");
             Processed++;
             _consecutiveSkips = 0;
             _lastSuccessMs = Environment.TickCount64;
             _silentRefireCount = 0;
-            ResetWaitingState();
             return false;
         }
 
@@ -361,18 +358,26 @@ public sealed unsafe class AttachmentPopManager : IDisposable
             return false;
         }
 
+        if (ItemRegistryClassifier.IsGift(GetBaseId(head)))
+        {
+            var mgr = InventoryManager.Instance();
+            if (mgr != null && mgr->GetEmptySlotsInBag() == 0)
+            {
+                Abort("bags full");
+                return false;
+            }
+        }
+
         var status = am->GetActionStatus(ActionType.Item, head);
         if (status == 0)
             return true;
 
         if (PermanentRejectStatuses.Contains(status))
         {
-            _itemQueue.Dequeue();
-            _useActionRetries.Remove(head);
-            MogLog.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}): already unlocked or cannot use (GetActionStatus={status}).");
+            DequeueHead();
+            Log.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}): already unlocked or cannot use (GetActionStatus={status}).");
             Skipped++;
             _consecutiveSkips++;
-            ResetWaitingState();
             CheckConsecutiveSkipAbort();
             return false;
         }
@@ -382,21 +387,20 @@ public sealed unsafe class AttachmentPopManager : IDisposable
             _waitingItemId = head;
             _waitingSinceMs = now;
             _waitingLastStatus = status;
-            MogLog.Information($"[Mogmail] pop wait {GetItemName(head)} (#{head}): GetActionStatus={status}");
+            Log.Info($"[Mogmail] pop wait {GetItemName(head)} (#{head}): GetActionStatus={status}");
         }
         else if (status != _waitingLastStatus)
         {
             _waitingLastStatus = status;
-            MogLog.Information($"[Mogmail] pop wait {GetItemName(head)} (#{head}): GetActionStatus={status}");
+            Log.Info($"[Mogmail] pop wait {GetItemName(head)} (#{head}): GetActionStatus={status}");
         }
 
         if (now - _waitingSinceMs > StatusReadyWaitMaxMs)
         {
-            _itemQueue.Dequeue();
-            MogLog.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}) after {StatusReadyWaitMaxMs}ms: GetActionStatus={status}");
+            DequeueHead();
+            Log.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}) after {StatusReadyWaitMaxMs}ms: GetActionStatus={status}");
             Skipped++;
             _consecutiveSkips++;
-            ResetWaitingState();
             CheckConsecutiveSkipAbort();
         }
 
@@ -445,6 +449,13 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _waitingBaseId = 0;
     }
 
+    private void DequeueHead()
+    {
+        var itemId = _itemQueue.Dequeue();
+        _useActionRetries.Remove(itemId);
+        ResetWaitingState();
+    }
+
     private void HoldOnHead(uint head, string reason)
     {
         var now = Environment.TickCount64;
@@ -453,16 +464,15 @@ public sealed unsafe class AttachmentPopManager : IDisposable
             _waitingItemId = head;
             _waitingSinceMs = now;
             _waitingLastStatus = 0;
-            MogLog.Information($"[Mogmail] pop wait {GetItemName(head)} (#{head}): {reason}");
+            Log.Info($"[Mogmail] pop wait {GetItemName(head)} (#{head}): {reason}");
         }
 
         if (now - _waitingSinceMs > StatusReadyWaitMaxMs)
         {
-            _itemQueue.Dequeue();
-            MogLog.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}) after {StatusReadyWaitMaxMs}ms: {reason}");
+            DequeueHead();
+            Log.Warning($"[Mogmail] pop skip {GetItemName(head)} (#{head}) after {StatusReadyWaitMaxMs}ms: {reason}");
             Skipped++;
             _consecutiveSkips++;
-            ResetWaitingState();
             CheckConsecutiveSkipAbort();
         }
     }
@@ -507,7 +517,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         {
             var refireName = GetItemName(_pendingUseItemId);
             _silentRefireCount++;
-            MogLog.Information($"[Mogmail] pop silent refire {refireName} (#{_pendingUseItemId}) attempt {_silentRefireCount}/{MaxSilentRefires} after {elapsed}ms.");
+            Log.Info($"[Mogmail] pop silent refire {refireName} (#{_pendingUseItemId}) attempt {_silentRefireCount}/{MaxSilentRefires} after {elapsed}ms.");
             var am = ActionManager.Instance();
             if (am != null)
             {
@@ -522,7 +532,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         if (elapsed > UseAckTimeoutMs)
         {
             var name = GetItemName(_pendingUseItemId);
-            MogLog.Warning($"[Mogmail] pop ack timeout for {name} (#{_pendingUseItemId}) after {UseAckTimeoutMs}ms refires={_silentRefireCount}. liveCount={liveCount} pre={_pendingPreCount}. Skipping.");
+            Log.Warning($"[Mogmail] pop ack timeout for {name} (#{_pendingUseItemId}) after {UseAckTimeoutMs}ms refires={_silentRefireCount}. liveCount={liveCount} pre={_pendingPreCount}. Skipping.");
             Skipped++;
             _consecutiveSkips++;
             _phase = Phase.ReadyToUse;
@@ -566,14 +576,14 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _lastDiagLogMs = now;
         var am = ActionManager.Instance();
         var lockSec = am != null ? am->AnimationLock : -1f;
-        MogLog.Information($"[Mogmail][trace] ack-wait #{_pendingUseItemId} elapsed={now - _useRequestedMs}ms anim={lockSec:F2}s");
+        Log.Info($"[Mogmail][trace] ack-wait #{_pendingUseItemId} elapsed={now - _useRequestedMs}ms anim={lockSec:F2}s");
 #endif
     }
 
     private static void TraceDiag(Func<string> msg)
     {
 #if DEBUG
-        MogLog.Information($"[Mogmail][trace] {msg()}");
+        Log.Info($"[Mogmail][trace] {msg()}");
 #endif
     }
 
@@ -594,7 +604,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _lastHoldTraceItem = head;
         _lastHoldTraceReason = reason;
         var label = reason == HoldReason.PostConfirmGrace ? "post-confirm grace" : "post-success cooldown";
-        MogLog.Information($"[Mogmail][trace] hold {GetItemName(head)} (#{head}): {label} {remainingMs}ms");
+        Log.Info($"[Mogmail][trace] hold {GetItemName(head)} (#{head}): {label} {remainingMs}ms");
 #else
         _ = head;
         _ = reason;
@@ -626,7 +636,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _pendingPreCount = GetItemCount(itemId);
         if (_pendingPreCount == 0)
         {
-            MogLog.Information($"[Mogmail] pop skip {name} (#{itemId}): not in inventory.");
+            Log.Info($"[Mogmail] pop skip {name} (#{itemId}): not in inventory.");
             Skipped++;
             _consecutiveSkips++;
             CheckConsecutiveSkipAbort();
@@ -636,18 +646,18 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         var am = ActionManager.Instance();
         if (am == null)
         {
-            MogLog.Warning("[Mogmail] ActionManager unavailable. Aborting pop.");
+            Log.Warning("[Mogmail] ActionManager unavailable. Aborting pop.");
             Abort("action manager unavailable");
             return true;
         }
 
         var extra = ResolveExtraParam(itemId);
         TraceDiag(() => $"fire {name} (#{itemId}) extra=0x{extra:X} anim={am->AnimationLock:F2}s queued={am->ActionQueued}");
-        MogLog.Information($"[Mogmail] pop use {name} (#{itemId}).");
+        Log.Info($"[Mogmail] pop use {name} (#{itemId}).");
         var ok = am->UseAction(ActionType.Item, itemId, extraParam: extra);
         if (!ok)
         {
-            MogLog.Information($"[Mogmail] pop UseAction returned false for {name} (#{itemId}).");
+            Log.Info($"[Mogmail] pop UseAction returned false for {name} (#{itemId}), casting={Plugin.Condition[ConditionFlag.Casting]}.");
             _lastUseActionTrueItemId = 0;
             return false;
         }
@@ -687,7 +697,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
             _armStillSinceMs = 0;
             _armLastPos = Plugin.ObjectTable.LocalPlayer?.Position ?? _armLastPos;
 #if DEBUG
-            MogLog.Information($"[Mogmail] pop arm gate fail: {reason}");
+            Log.Info($"[Mogmail] pop arm gate fail: {reason}");
 #endif
             return;
         }
@@ -701,7 +711,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         _armReason = "";
         _armStartMs = 0;
         _armStillSinceMs = 0;
-        MogLog.Information($"[Mogmail] pop arming gates cleared ({reasonCopy}). Starting pop.");
+        Log.Info($"[Mogmail] pop arming gates cleared ({reasonCopy}). Starting pop.");
         Start(allowSensitive);
     }
 
@@ -818,7 +828,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         if (addon == null) return;
         if (!addon->IsVisible) return;
         addon->Close(true);
-        MogLog.Information("[Mogmail] pop arm: requested LetterList close.");
+        Log.Info("[Mogmail] pop arm: requested LetterList close.");
     }
 
     private bool NotReadyYet()
@@ -831,8 +841,8 @@ public sealed unsafe class AttachmentPopManager : IDisposable
 
     private void Complete()
     {
-        MogLog.Information($"[Mogmail] pop done. processed={Processed} skipped={Skipped}");
-        Plugin.Chat.Print($"[Mogmail] pop: {Processed} done, {Skipped} skipped.");
+        Log.Info($"[Mogmail] pop done. processed={Processed} skipped={Skipped}");
+        Common.Chat.Result($"pop: {Processed} done, {Skipped} skipped.");
         FinishRun();
     }
 
@@ -846,6 +856,7 @@ public sealed unsafe class AttachmentPopManager : IDisposable
         if (mgr == null) return result;
 
         var seen = new HashSet<uint>();
+        var gifts = new List<uint>();
         foreach (var bagType in PlayerBags)
         {
             var c = mgr->GetInventoryContainer(bagType);
@@ -868,10 +879,16 @@ public sealed unsafe class AttachmentPopManager : IDisposable
                 }
                 if (!ItemRegistryClassifier.TryClassify(rawItemId, out var category, out var baseId)) continue;
                 if (!Plugin.Config.IsPopCategoryEnabled(category)) { skippedDisabled++; continue; }
+                if (category == PopCategory.Gifts)
+                {
+                    for (var n = GetItemCount(rawItemId); n > 0; n--) gifts.Add(rawItemId);
+                    continue;
+                }
                 if (ItemRegistryClassifier.IsAlreadyUnlocked(baseId)) { skippedUnlocked++; continue; }
                 result.Add(rawItemId);
             }
         }
+        result.AddRange(gifts);
         return result;
     }
 

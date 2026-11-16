@@ -20,11 +20,14 @@ public enum PopCategory
     CompanySealVouchers = 12,
     OccultRecords = 13,
     SoulShards = 14,
+    Gifts = 15,
 }
 
 public static class ItemRegistryClassifier
 {
-    public const uint FantasiaItemId = 7596;
+    private const uint WrappedGiftItemId = 51268;
+
+    public static bool IsGift(uint baseItemId) => baseItemId == WrappedGiftItemId;
 
     public static bool IsSensitive(uint baseItemId) => SensitiveItemRegistry.TryGetCategory(baseItemId, out _);
 
@@ -41,6 +44,7 @@ public static class ItemRegistryClassifier
         baseItemId = 0;
         var (b, _) = ItemUtil.GetBaseId(rawItemId);
         baseItemId = b;
+        if (IsGift(b)) { category = PopCategory.Gifts; return true; }
         var sheet = Plugin.Data.GetExcelSheet<Item>();
         if (!sheet.TryGetRow(b, out var item)) return false;
         if (item.ItemAction.RowId == 0) return false;
@@ -72,12 +76,14 @@ public static class ItemRegistryClassifier
         PopCategory.CompanySealVouchers => "Company Seal Vouchers",
         PopCategory.OccultRecords => "Occult Records",
         PopCategory.SoulShards => "Phantom Soul Shards",
+        PopCategory.Gifts => "Gifts",
         _ => category.ToString(),
     };
 
     public static string CategoryTooltip(PopCategory category) => category switch
     {
         PopCategory.UnlockLink => "Emotes, hairstyles, and riding maps.",
+        PopCategory.Gifts => "Wrapped Gift.",
         _ => string.Empty,
     };
 

@@ -32,9 +32,6 @@ public sealed class Configuration : IPluginConfiguration
     public bool AllowOneHerosJourneyInPop { get; set; } = false;
     public bool AllowOneRetainersJourneyInPop { get; set; } = false;
 
-    public bool EnableExternalLogFile { get; set; } = false;
-    public string ExternalLogFilePath { get; set; } = "";
-
     public bool PopTraceEveryFrame { get; set; } = false;
 
     public bool EnableGiftEcho { get; set; } = false;
@@ -42,6 +39,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public float PopOverlayPosX { get; set; } = -1f;
     public float PopOverlayPosY { get; set; } = -1f;
+
+    public int LastSeenWhatsNewRevision { get; set; } = 0;
 
     public bool IsPopCategoryEnabled(PopCategory category)
     {
@@ -80,8 +79,6 @@ public sealed class Configuration : IPluginConfiguration
         AllowOneRetainersJourneyInPop = false;
 
         PopTraceEveryFrame = false;
-        EnableExternalLogFile = false;
-        ExternalLogFilePath = "";
 
         EnableGiftEcho = false;
         EnableArchive = false;

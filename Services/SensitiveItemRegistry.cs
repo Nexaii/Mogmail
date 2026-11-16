@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Dalamud.Game;
 using Lumina.Excel.Sheets;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -60,7 +61,7 @@ public static class SensitiveItemRegistry
         var sheet = Plugin.Data.GetExcelSheet<Item>(ClientLanguage.English);
         if (sheet == null)
         {
-            MogLog.Warning("[Mogmail] sensitive registry: English Item sheet unavailable. No items will be flagged sensitive.");
+            Log.Warning("[Mogmail] sensitive registry: English Item sheet unavailable. No items will be flagged sensitive.");
             return map;
         }
 
@@ -85,9 +86,9 @@ public static class SensitiveItemRegistry
         }
 
         if (!map.ContainsKey(FantasiaBaseId))
-            MogLog.Warning($"[Mogmail] sensitive registry: Fantasia row {FantasiaBaseId} missing from Item sheet. Fantasia protection disabled.");
+            Log.Warning($"[Mogmail] sensitive registry: Fantasia row {FantasiaBaseId} missing from Item sheet. Fantasia protection disabled.");
         if (map.Count < 2)
-            MogLog.Warning($"[Mogmail] sensitive registry: only {map.Count} entries built. Tales of Adventure patterns may have changed.");
+            Log.Warning($"[Mogmail] sensitive registry: only {map.Count} entries built. Tales of Adventure patterns may have changed.");
 
         return map;
     }

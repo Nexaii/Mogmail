@@ -336,7 +336,7 @@ public sealed class ToolbarWindow : Window
         var candidates = BuildCandidates(ClaimAction.Take, includeGM: false);
         if (candidates.Count == 0)
         {
-            Plugin.Chat.Print("[Mogmail] no letters with attachments to claim.");
+            Common.Chat.Result("no letters with attachments to claim.");
             return;
         }
         Plugin.Instance.ClaimQueue.StartTake("Take Attachment(s)", candidates);
@@ -347,7 +347,7 @@ public sealed class ToolbarWindow : Window
         var candidates = BuildCandidates(ClaimAction.Take, includeGM: false);
         if (candidates.Count == 0)
         {
-            Plugin.Chat.Print("[Mogmail] no letters with attachments to claim.");
+            Common.Chat.Result("no letters with attachments to claim.");
             return;
         }
 
@@ -364,7 +364,7 @@ public sealed class ToolbarWindow : Window
                 var fresh = BuildCandidates(ClaimAction.Take, includeGM: false);
                 if (fresh.Count == 0)
                 {
-                    Plugin.Chat.Print("[Mogmail] no letters with attachments to claim.");
+                    Common.Chat.Result("no letters with attachments to claim.");
                     return;
                 }
                 Plugin.Instance.ClaimQueue.StartTakeAndDelete("Take + Delete", fresh);
@@ -443,7 +443,7 @@ public sealed class ToolbarWindow : Window
         var preview = BuildScopePreview(scope, includeGM);
         if (preview.LetterCount == 0)
         {
-            Plugin.Chat.Print($"[Mogmail] {label}: no matching letters.");
+            Common.Chat.Result($"{label}: no matching letters.");
             return;
         }
         var predicate = BuildDeletePredicate(scope, includeGM);

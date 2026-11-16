@@ -518,7 +518,7 @@ public sealed class ArchiveWindow : Window
         var entries = OrderedEntries();
         if (entries.Count == 0)
         {
-            Plugin.Chat.Print("[Mogmail] no entries to export.");
+            Common.Chat.Result("no entries to export.");
             return;
         }
 
@@ -527,11 +527,11 @@ public sealed class ArchiveWindow : Window
         try
         {
             File.WriteAllText(path, markdown);
-            Plugin.Chat.Print($"[Mogmail] exported {entries.Count} entries to {path}");
+            Common.Chat.Result($"exported {entries.Count} entries to {path}");
         }
         catch (Exception ex)
         {
-            Plugin.Chat.Print($"[Mogmail] export failed: {ex.Message}");
+            Common.Chat.Warn($"export failed: {ex.Message}");
         }
     }
 
@@ -539,18 +539,18 @@ public sealed class ArchiveWindow : Window
     {
         if (!Plugin.Instance.Archive.TryGetEntry(key, out var entry))
         {
-            Plugin.Chat.Print("[Mogmail] export failed: entry not found.");
+            Common.Chat.Warn("export failed: entry not found.");
             return;
         }
         var markdown = Plugin.Instance.Archive.BuildSingleEntryMarkdown(entry, LookupItemName);
         try
         {
             File.WriteAllText(path, markdown);
-            Plugin.Chat.Print($"[Mogmail] exported 1 entry to {path}");
+            Common.Chat.Result($"exported 1 entry to {path}");
         }
         catch (Exception ex)
         {
-            Plugin.Chat.Print($"[Mogmail] export failed: {ex.Message}");
+            Common.Chat.Warn($"export failed: {ex.Message}");
         }
     }
 
@@ -558,18 +558,18 @@ public sealed class ArchiveWindow : Window
     {
         if (entries.Count == 0)
         {
-            Plugin.Chat.Print("[Mogmail] no entries to export.");
+            Common.Chat.Result("no entries to export.");
             return;
         }
         var markdown = Plugin.Instance.Archive.BuildMarkdownExport(entries, $"selection ({entries.Count})", LookupItemName);
         try
         {
             File.WriteAllText(path, markdown);
-            Plugin.Chat.Print($"[Mogmail] exported {entries.Count} entries to {path}");
+            Common.Chat.Result($"exported {entries.Count} entries to {path}");
         }
         catch (Exception ex)
         {
-            Plugin.Chat.Print($"[Mogmail] export failed: {ex.Message}");
+            Common.Chat.Warn($"export failed: {ex.Message}");
         }
     }
 

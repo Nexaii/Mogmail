@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Mogmail.Models;
 using Mogmail.Services;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Managers;
 
@@ -84,7 +85,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         Total = _takeIndices.Count;
         ResetRunState();
         _autoPopPending = Plugin.Config.AutoPopAfterTake;
-        MogLog.Information($"[Mogmail] {actionLabel} started. {Total} letters in batch.");
+        Log.Info($"[Mogmail] {actionLabel} started. {Total} letters in batch.");
     }
 
     public void StartTakeAndDelete(string actionLabel, IEnumerable<int> indices)
@@ -93,7 +94,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         StartTake(actionLabel, indices);
         if (State != RunState.Running) return;
         _autoDeleteAfterTake = true;
-        MogLog.Information($"[Mogmail] {actionLabel}: auto-delete chain armed.");
+        Log.Info($"[Mogmail] {actionLabel}: auto-delete chain armed.");
     }
 
     public void StartDelete(ClaimAction action, string actionLabel, Func<int, bool> predicate, int budget)
@@ -107,7 +108,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         _deleteBudget = budget;
         Total = budget;
         ResetRunState();
-        MogLog.Information($"[Mogmail] {actionLabel} started. {Total} letters in batch.");
+        Log.Info($"[Mogmail] {actionLabel} started. {Total} letters in batch.");
     }
 
     private void ResetRunState()
@@ -134,8 +135,8 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     public void Abort(string reason)
     {
         if (State == RunState.Idle) return;
-        MogLog.Information($"[Mogmail] {CurrentLabel} aborted: {reason}. processed={Processed} skipped={Skipped}");
-        Plugin.Chat.Print($"[Mogmail] aborted ({reason}). {Processed} done, {Skipped} skipped.");
+        Log.Info($"[Mogmail] {CurrentLabel} aborted: {reason}. processed={Processed} skipped={Skipped}");
+        Common.Chat.Warn($"aborted ({reason}). {Processed} done, {Skipped} skipped.");
         _autoPopPending = false;
         FinishRun();
     }
@@ -156,7 +157,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] ClaimQueue tick exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] ClaimQueue tick exception: {ex}"); } catch { }
             try { Abort("tick exception"); } catch { State = RunState.Idle; }
         }
     }
@@ -216,7 +217,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         if (Environment.TickCount64 - _detailRequestedMs > DetailAckTimeoutMs)
         {
-            MogLog.Warning($"[Mogmail] detail ack timeout for idx {_pendingTakeIdx}. Skipping letter.");
+            Log.Warning($"[Mogmail] detail ack timeout for idx {_pendingTakeIdx}. Skipping letter.");
             Skipped++;
             ResetTakePhase();
         }
@@ -253,7 +254,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         if (Environment.TickCount64 - _takeRequestedMs > TakeAckTimeoutMs)
         {
-            MogLog.Warning($"[Mogmail] take ack timeout idx={liveIdx} ({_pendingTakeKey.ContentId:X}/{_pendingTakeKey.Timestamp}) elapsed={Environment.TickCount64 - _takeRequestedMs}ms. Skipping letter.");
+            Log.Warning($"[Mogmail] take ack timeout idx={liveIdx} ({_pendingTakeKey.ContentId:X}/{_pendingTakeKey.Timestamp}) elapsed={Environment.TickCount64 - _takeRequestedMs}ms. Skipping letter.");
             DumpFinalSlotState(liveIdx);
             Skipped++;
             ResetTakePhase();
@@ -274,7 +275,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
         if (delta == _lastLoggedAttachmentDelta) return;
         _lastLoggedAttachmentDelta = delta;
 
-        MogLog.Information(
+        Log.Info(
             $"[Mogmail][trace] phase=AwaitingTakeAck idx={liveIdx} cleared_slots={clearedCount}/{NonZeroCount(_pendingTakeSlotsPre)} gil_cleared={(gilCleared == 1 ? "yes" : "no")} elapsed={Environment.TickCount64 - _takeRequestedMs}ms");
 #endif
     }
@@ -284,7 +285,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 #if DEBUG
         Span<uint> live = stackalloc uint[LetterAttachmentSlotCount];
         if (!Plugin.Instance.Mailbox.SnapshotAttachmentState(liveIdx, out var gilLive, live)) return;
-        MogLog.Information(
+        Log.Info(
             $"[Mogmail][trace] final state idx={liveIdx} pre_slots=[{_pendingTakeSlotsPre[0]},{_pendingTakeSlotsPre[1]},{_pendingTakeSlotsPre[2]},{_pendingTakeSlotsPre[3]},{_pendingTakeSlotsPre[4]}] live_slots=[{live[0]},{live[1]},{live[2]},{live[3]},{live[4]}] gil_pre={_pendingTakeGilPre} gil_live={gilLive}");
 #endif
     }
@@ -336,14 +337,14 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         if (mailbox.PendingDetailIndex >= 0)
         {
-            MogLog.Information("[Mogmail] another detail request pending, deferring take.");
+            Log.Info("[Mogmail] another detail request pending, deferring take.");
             _takeIndices.Enqueue(idx);
             return;
         }
 
         if (!mailbox.RequestLetterDetail(idx))
         {
-            MogLog.Warning($"[Mogmail] RequestLetterDetail({idx}) returned false. Falling through to direct take.");
+            Log.Warning($"[Mogmail] RequestLetterDetail({idx}) returned false. Falling through to direct take.");
             InvokeTake(idx);
             return;
         }
@@ -392,8 +393,8 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
     private void CompleteRun()
     {
-        MogLog.Information($"[Mogmail] {CurrentLabel} done. processed={Processed} skipped={Skipped}");
-        Plugin.Chat.Print($"[Mogmail] {CurrentLabel}: {Processed} done, {Skipped} skipped.");
+        Log.Info($"[Mogmail] {CurrentLabel} done. processed={Processed} skipped={Skipped}");
+        Common.Chat.Result($"{CurrentLabel}: {Processed} done, {Skipped} skipped.");
 
         var shouldChainDelete = CurrentAction == ClaimAction.Take
             && _autoDeleteAfterTake
@@ -510,7 +511,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
 
         if (!proxy->TakeAttachments((uint)idx, -1))
         {
-            MogLog.Warning($"[Mogmail] TakeAttachments({idx}) returned false. Skipping letter.");
+            Log.Warning($"[Mogmail] TakeAttachments({idx}) returned false. Skipping letter.");
             Skipped++;
             ResetTakePhase();
             return;
@@ -523,7 +524,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     {
         if (State != RunState.Running || _takePhase != TakePhase.AwaitingTakeAck) return;
 
-        MogLog.Warning($"[Mogmail] server rejection mid-take: \"{message}\" idx={_pendingTakeIdx}. Skipping letter and backing off {RejectionBackoffMs}ms.");
+        Log.Warning($"[Mogmail] server rejection mid-take: \"{message}\" idx={_pendingTakeIdx}. Skipping letter and backing off {RejectionBackoffMs}ms.");
         Skipped++;
         _rejectionBackoffUntilMs = Environment.TickCount64 + RejectionBackoffMs;
         ResetTakePhase();
@@ -532,7 +533,7 @@ public sealed unsafe class ClaimQueueManager : IDisposable
     private static void TraceTake(string line)
     {
 #if DEBUG
-        MogLog.Information($"[Mogmail][trace] {line}");
+        Log.Info($"[Mogmail][trace] {line}");
 #else
         _ = line;
 #endif

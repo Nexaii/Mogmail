@@ -6,6 +6,8 @@ namespace Mogmail.UI.Tabs;
 
 public sealed class GeneralTab : ISettingsTab
 {
+    private const string ResetPopupId = "##MogmailResetConfirm";
+
     public string Name => "General";
 
     public void Draw()
@@ -20,6 +22,14 @@ public sealed class GeneralTab : ISettingsTab
             ImGui.Spacing();
 
             if (Theme.DrawSectionHeader("Archive")) DrawArchiveSection();
+            ImGui.Spacing();
+
+#if DEBUG
+            if (Theme.DrawSectionHeader("Pop tracing")) DrawPopTraceSection();
+            ImGui.Spacing();
+#endif
+
+            DrawResetSection();
         }
         finally
         {
@@ -73,4 +83,41 @@ public sealed class GeneralTab : ISettingsTab
         }
     }
 
+#if DEBUG
+    private static void DrawPopTraceSection()
+    {
+        var everyFrame = Plugin.Config.PopTraceEveryFrame;
+        if (SettingsRows.Checkbox("Log pop holds every frame", ref everyFrame))
+        {
+            Plugin.Config.PopTraceEveryFrame = everyFrame;
+            Plugin.Config.Save();
+        }
+    }
+#endif
+
+    private static void DrawResetSection()
+    {
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        if (SettingsRows.DangerButton("Reset to defaults", "Reset every Mogmail setting to its install default."))
+            ImGui.OpenPopup(ResetPopupId);
+
+        if (!ImGui.BeginPopup(ResetPopupId)) return;
+
+        ImGui.TextUnformatted("Reset all Mogmail settings to defaults?");
+        ImGui.Spacing();
+
+        if (SettingsRows.DangerButton("Yes, reset"))
+        {
+            Plugin.Config.ResetToDefaults();
+            Plugin.Config.Save();
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (SettingsRows.PrimaryButton("Cancel"))
+            ImGui.CloseCurrentPopup();
+
+        ImGui.EndPopup();
+    }
 }

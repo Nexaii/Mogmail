@@ -2,16 +2,26 @@
     "Author": "Nexai",
     "Name": "Mogmail",
     "InternalName": "Mogmail",
-    "AssemblyVersion": "1.2.6.0",
+    "AssemblyVersion": "1.3.0.0",
     "Description": "A better mail service. Bulk attachment claiming, bulk delete, and inventory pop.",
     "Punchline": "\"Nice mailbox. It would be a shame if someone... emptied it, kupo.\"",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
     "Tags": [
+        "auto pop",
+        "delivery moogle",
         "mail",
         "letters",
+        "mog",
+        "moguri",
         "moogle",
-        "automation"
+        "automation",
+        "邮件",
+        "莫古力邮件",
+        "莫古力邮递",
+        "モグレタ",
+        "モグレターモーグリ",
+        "モグポスト"
     ],
     "LoadRequiredState": 0,
     "LoadSync": false,
@@ -20,5 +30,5 @@
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/mogmail.png",
     "RepoUrl": "https://github.com/Nexaii/Mogmail",
-    "Changelog": "Adjustments to Auto Pop, which now confirms its own dialog."
+    "Changelog": "Added\n- Info button in the settings title bar. Opens Changelog, Logs, and Credits.\n- Support for the new Wrapped Gift item."
 }

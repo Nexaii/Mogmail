@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Mogmail.Models;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -387,7 +388,7 @@ public sealed unsafe class MailArchiveService : IDisposable
         }
         catch (Exception ex)
         {
-            MogLog.Warning($"[Mogmail] archive load failed for {contentId:X}: {ex.Message}");
+            Log.Warning($"[Mogmail] archive load failed for {contentId:X}: {ex.Message}");
             return null;
         }
     }
@@ -406,7 +407,7 @@ public sealed unsafe class MailArchiveService : IDisposable
         }
         catch (Exception ex)
         {
-            MogLog.Warning($"[Mogmail] archive serialize failed for {_loadedContentId:X}: {ex.Message}");
+            Log.Warning($"[Mogmail] archive serialize failed for {_loadedContentId:X}: {ex.Message}");
             return;
         }
 
@@ -443,7 +444,7 @@ public sealed unsafe class MailArchiveService : IDisposable
             }
             catch (Exception ex)
             {
-                MogLog.Warning($"[Mogmail] archive write failed for {path}: {ex.Message}");
+                Log.Warning($"[Mogmail] archive write failed for {path}: {ex.Message}");
                 MarkDirty();
             }
 
@@ -469,11 +470,11 @@ public sealed unsafe class MailArchiveService : IDisposable
         try
         {
             if (!task.Wait(timeoutMs))
-                MogLog.Warning($"[Mogmail] archive write did not complete within {timeoutMs}ms. State may lag on disk.");
+                Log.Warning($"[Mogmail] archive write did not complete within {timeoutMs}ms. State may lag on disk.");
         }
         catch (Exception ex)
         {
-            MogLog.Warning($"[Mogmail] archive flush wait threw: {ex.Message}");
+            Log.Warning($"[Mogmail] archive flush wait threw: {ex.Message}");
         }
     }
 

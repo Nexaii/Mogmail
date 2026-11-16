@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Dalamud.Game;
 using Lumina.Excel.Sheets;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -17,7 +18,7 @@ public static class PopBlacklistRegistry
         var sheet = Plugin.Data.GetExcelSheet<Item>(ClientLanguage.English);
         if (sheet == null)
         {
-            MogLog.Warning("[Mogmail] pop blacklist: English Item sheet unavailable. Blacklist is empty.");
+            Log.Warning("[Mogmail] pop blacklist: English Item sheet unavailable. Blacklist is empty.");
             return set;
         }
 
@@ -30,7 +31,7 @@ public static class PopBlacklistRegistry
         }
 
         if (set.Count == 0)
-            MogLog.Warning("[Mogmail] pop blacklist: zero Aetheryte Tickets identified. Pattern may have changed.");
+            Log.Warning("[Mogmail] pop blacklist: zero Aetheryte Tickets identified. Pattern may have changed.");
 
         return set;
     }

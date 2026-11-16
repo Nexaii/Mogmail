@@ -4,6 +4,7 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using Mogmail.Models;
 using Mogmail.Services;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Managers;
 
@@ -53,7 +54,7 @@ public sealed class ReadAllManager : IDisposable
         if (!Plugin.Instance.PopQueue.IsIdle) return;
         if (!Plugin.Instance.Mailbox.CanRequestLetterDetail)
         {
-            Plugin.Chat.Print("[Mogmail] Read All: RequestLetterDetail unavailable, mark-read disabled.");
+            Common.Chat.Warn("Read All: RequestLetterDetail unavailable, mark-read disabled.");
             return;
         }
 
@@ -81,10 +82,10 @@ public sealed class ReadAllManager : IDisposable
         CurrentLabel = label;
         State = RunState.Running;
 
-        MogLog.Information($"[Mogmail] {label} started. {Total} unread letters.");
+        Log.Info($"[Mogmail] {label} started. {Total} unread letters.");
         if (Total == 0 && !deleteAfter)
         {
-            Plugin.Chat.Print("[Mogmail] Read All: nothing to mark.");
+            Common.Chat.Result("Read All: nothing to mark.");
             FinishRun();
         }
     }
@@ -92,8 +93,8 @@ public sealed class ReadAllManager : IDisposable
     public void Abort(string reason)
     {
         if (State == RunState.Idle) return;
-        MogLog.Information($"[Mogmail] {CurrentLabel} aborted: {reason}. processed={Processed} skipped={Skipped}");
-        Plugin.Chat.Print($"[Mogmail] {CurrentLabel} aborted ({reason}). {Processed} done, {Skipped} skipped.");
+        Log.Info($"[Mogmail] {CurrentLabel} aborted: {reason}. processed={Processed} skipped={Skipped}");
+        Common.Chat.Warn($"{CurrentLabel} aborted ({reason}). {Processed} done, {Skipped} skipped.");
         FinishRun();
     }
 
@@ -113,7 +114,7 @@ public sealed class ReadAllManager : IDisposable
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] ReadAll tick exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] ReadAll tick exception: {ex}"); } catch { }
             try { Abort("tick exception"); } catch { State = RunState.Idle; }
         }
     }
@@ -170,7 +171,7 @@ public sealed class ReadAllManager : IDisposable
 
         if (!mailbox.RequestLetterDetail(idx))
         {
-            MogLog.Warning($"[Mogmail] Read All: RequestLetterDetail({idx}) returned false. Skipping.");
+            Log.Warning($"[Mogmail] Read All: RequestLetterDetail({idx}) returned false. Skipping.");
             Skipped++;
             _pendingIdx = -1;
             return;
@@ -195,7 +196,7 @@ public sealed class ReadAllManager : IDisposable
 
         if (Environment.TickCount64 - _detailRequestedMs > DetailAckTimeoutMs)
         {
-            MogLog.Warning($"[Mogmail] Read All: detail ack timeout for idx {_pendingIdx}. Skipping.");
+            Log.Warning($"[Mogmail] Read All: detail ack timeout for idx {_pendingIdx}. Skipping.");
             Skipped++;
             _pendingIdx = -1;
                 _phase = Phase.ReadyForDetail;
@@ -223,9 +224,9 @@ public sealed class ReadAllManager : IDisposable
 
     private void Complete()
     {
-        MogLog.Information($"[Mogmail] {CurrentLabel} done. processed={Processed} skipped={Skipped}");
+        Log.Info($"[Mogmail] {CurrentLabel} done. processed={Processed} skipped={Skipped}");
         if (Total > 0)
-            Plugin.Chat.Print($"[Mogmail] {CurrentLabel}: {Processed} read, {Skipped} skipped.");
+            Common.Chat.Result($"{CurrentLabel}: {Processed} read, {Skipped} skipped.");
 
         var chainDelete = _deleteAfter;
         var chainLabel = $"{CurrentLabel} -> Delete (Read & Empty)";
@@ -248,7 +249,7 @@ public sealed class ReadAllManager : IDisposable
         for (var i = 0; i < count; i++) if (Predicate(i)) targets++;
         if (targets == 0)
         {
-            Plugin.Chat.Print($"[Mogmail] {label}: no read & empty letters.");
+            Common.Chat.Result($"{label}: no read & empty letters.");
             return;
         }
 

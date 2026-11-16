@@ -9,7 +9,6 @@ public static class SettingsRows
     public const float LabelWidth = 180f;
     public const float InputWidthSmall = 100f;
     public const float InputWidthMedium = 150f;
-    public const float InputWidthLarge = 220f;
 
     private static readonly Vector4 DangerHover = new(0.80f, 0.20f, 0.20f, 1.00f);
 

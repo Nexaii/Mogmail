@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -10,15 +9,15 @@ namespace Mogmail.UI;
 
 public sealed class SettingsWindow : Window
 {
-    private const string PatreonUrl = "https://www.patreon.com/cw/Nexairi";
     private const float FrameRounding = 6f;
     private const float FrameBorderSize = 1f;
     private const float ChildRounding = 6f;
 
     private readonly ISettingsTab[] _tabs;
-    private readonly TitleBarButton _patreonButton;
+    private readonly TitleBarButton _supportButton;
+    private readonly TitleBarButton _infoButton;
 
-    public SettingsWindow() : base("Mogmail##MogmailSettings")
+    public SettingsWindow(InfoWindow infoWindow) : base("Mogmail##MogmailSettings")
     {
         Size = new Vector2(520, 500);
         SizeCondition = ImGuiCond.FirstUseEver;
@@ -32,20 +31,29 @@ public sealed class SettingsWindow : Window
         [
             new GeneralTab(),
             new PopTab(),
-            new DiagnosticsTab(),
         ];
 
-        _patreonButton = new TitleBarButton
+        _supportButton = new TitleBarButton
         {
             Icon = FontAwesomeIcon.Heart,
-            ShowTooltip = () => ImGui.SetTooltip("Support on Patreon"),
+            ShowTooltip = () => ImGui.SetTooltip("Support Plugin"),
             Priority = int.MinValue,
             IconOffset = new Vector2(1.5f, 1),
-            Click = _ => OpenPatreonLink(),
+            Click = _ => InfoWindow.OpenLink(InfoWindow.SupportUrl),
             AvailableClickthrough = true,
         };
 
-        TitleBarButtons.Add(_patreonButton);
+        _infoButton = new TitleBarButton
+        {
+            Icon = FontAwesomeIcon.InfoCircle,
+            ShowTooltip = () => ImGui.SetTooltip("Changelog, logs, and credits"),
+            Priority = 2,
+            IconOffset = new Vector2(1.5f, 1),
+            Click = _ => infoWindow.Toggle(),
+        };
+
+        TitleBarButtons.Add(_supportButton);
+        TitleBarButtons.Add(_infoButton);
     }
 
     public override void Draw()
@@ -68,21 +76,5 @@ public sealed class SettingsWindow : Window
         }
 
         ImGui.EndTabBar();
-    }
-
-    private static void OpenPatreonLink()
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = PatreonUrl,
-                UseShellExecute = true,
-                Verb = string.Empty,
-            });
-        }
-        catch
-        {
-        }
     }
 }

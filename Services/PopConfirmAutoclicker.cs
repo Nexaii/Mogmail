@@ -2,6 +2,7 @@ using System;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -35,7 +36,7 @@ public sealed unsafe class PopConfirmAutoclicker : IDisposable
 
             if (TryFindVisibleDestructiveAddon(out var blockingAddon))
             {
-                MogLog.Warning($"[Mogmail] pop autoclicker: skipped, destructive addon visible: {blockingAddon}.");
+                Log.Warning($"[Mogmail] pop autoclicker: skipped, destructive addon visible: {blockingAddon}.");
                 return;
             }
 
@@ -44,11 +45,11 @@ public sealed unsafe class PopConfirmAutoclicker : IDisposable
 
             FireYesCallback(atk);
             Plugin.Instance.PopQueue.NotifyConfirmFired();
-            MogLog.Information("[Mogmail] pop autoclicker: auto-confirmed SelectYesNo.");
+            Log.Info("[Mogmail] pop autoclicker: auto-confirmed SelectYesNo.");
         }
         catch (Exception ex)
         {
-            try { MogLog.Error($"[Mogmail] PopConfirmAutoclicker exception: {ex}"); } catch { }
+            try { Log.Error($"[Mogmail] PopConfirmAutoclicker exception: {ex}"); } catch { }
         }
     }
 

@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Mogmail.Constants;
 using Mogmail.Models;
+using Mogmail.Diagnostics;
 
 namespace Mogmail.Services;
 
@@ -60,33 +61,33 @@ public sealed unsafe class MailboxService : IDisposable
         if (Plugin.SigScanner.TryScanText(RequestLetterDetailSignature, out var detailAddr))
         {
             _requestLetterDetail = Marshal.GetDelegateForFunctionPointer<RequestLetterDetailDelegate>(detailAddr);
-            MogLog.Information($"[Mogmail] RequestLetterDetail resolved at 0x{detailAddr.ToInt64():X}");
+            Log.Info($"[Mogmail] RequestLetterDetail resolved at 0x{detailAddr.ToInt64():X}");
         }
         else
         {
-            MogLog.Warning("[Mogmail] RequestLetterDetail signature not found. Take path will skip detail-request prefix (vanilla packet order broken).");
+            Log.Warning("[Mogmail] RequestLetterDetail signature not found. Take path will skip detail-request prefix (vanilla packet order broken).");
         }
 
         if (Plugin.SigScanner.TryScanText(AddDataSignature, out var addDataAddr))
         {
             _addDataHook = Plugin.GameInteropProvider.HookFromAddress<AddDataDelegate>(addDataAddr, AddDataDetour);
             _addDataHook.Enable();
-            MogLog.Information($"[Mogmail] AddData hook installed at 0x{addDataAddr.ToInt64():X}");
+            Log.Info($"[Mogmail] AddData hook installed at 0x{addDataAddr.ToInt64():X}");
         }
         else
         {
-            MogLog.Warning("[Mogmail] AddData signature not found. Archive receive tracking will rely on degraded fallback path.");
+            Log.Warning("[Mogmail] AddData signature not found. Archive receive tracking will rely on degraded fallback path.");
         }
 
         if (Plugin.SigScanner.TryScanText(HandleLetterDetailResponseSignature, out var detailRespAddr))
         {
             _handleLetterDetailHook = Plugin.GameInteropProvider.HookFromAddress<HandleLetterDetailResponseDelegate>(detailRespAddr, HandleLetterDetailDetour);
             _handleLetterDetailHook.Enable();
-            MogLog.Information($"[Mogmail] HandleLetterDetailResponse hook installed at 0x{detailRespAddr.ToInt64():X}");
+            Log.Info($"[Mogmail] HandleLetterDetailResponse hook installed at 0x{detailRespAddr.ToInt64():X}");
         }
         else
         {
-            MogLog.Warning("[Mogmail] HandleLetterDetailResponse signature not found. Archive will not capture full message bodies.");
+            Log.Warning("[Mogmail] HandleLetterDetailResponse signature not found. Archive will not capture full message bodies.");
         }
     }
 
@@ -114,7 +115,7 @@ public sealed unsafe class MailboxService : IDisposable
         }
         catch (Exception ex)
         {
-            MogLog.Warning($"[Mogmail] NewLetterObserved subscriber threw: {ex.Message}");
+            Log.Warning($"[Mogmail] NewLetterObserved subscriber threw: {ex.Message}");
         }
     }
 
@@ -144,7 +145,7 @@ public sealed unsafe class MailboxService : IDisposable
         var handler = LetterDetailReceived;
         if (handler == null) return;
         try { handler(body, cid, timestamp); }
-        catch (Exception ex) { MogLog.Warning($"[Mogmail] LetterDetailReceived subscriber threw: {ex.Message}"); }
+        catch (Exception ex) { Log.Warning($"[Mogmail] LetterDetailReceived subscriber threw: {ex.Message}"); }
     }
 
     private static string ReadNullTerminatedUtf8(byte* ptr)

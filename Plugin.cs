@@ -4,6 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Mogmail.Diagnostics;
 using Mogmail.IPC;
 using Mogmail.Managers;
 using Mogmail.Services;
@@ -17,7 +18,7 @@ public sealed class Plugin : IDalamudPlugin
 
     [PluginService] public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] public static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService] public static IPluginLog Log { get; private set; } = null!;
+    [PluginService] public static IPluginLog PluginLog { get; private set; } = null!;
     [PluginService] public static IClientState ClientState { get; private set; } = null!;
     [PluginService] public static IFramework Framework { get; private set; } = null!;
     [PluginService] public static IGameGui GameGui { get; private set; } = null!;
@@ -29,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] public static ICondition Condition { get; private set; } = null!;
     [PluginService] public static IUnlockState UnlockState { get; private set; } = null!;
+    [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     public static Configuration Config { get; private set; } = null!;
     public static Plugin Instance { get; private set; } = null!;
@@ -50,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
     private const string CommandName = "/mogmail";
 
     private readonly WindowSystem _windowSystem = new("Mogmail");
+    private readonly InfoWindow _infoWindow;
     private readonly SettingsWindow _settingsWindow;
     private readonly ConfirmDialog _confirmDialog;
     private readonly TakeDeleteConfirmDialog _takeDeleteConfirmDialog;
@@ -63,7 +66,11 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Instance = this;
-        Config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        Config = PluginInterface.GetPluginConfig() as Configuration
+            ?? new Configuration { LastSeenWhatsNewRevision = Common.Changelog.Revision };
+
+        Log.Init("Mogmail", PluginLog, () => false, () => string.Empty, string.Empty);
+        Common.Chat.Init("Mogmail", Chat);
 
         Mailbox = new MailboxService();
         MailRejectionWatcher = new MailRejectionWatcher(Chat);
@@ -78,7 +85,8 @@ public sealed class Plugin : IDalamudPlugin
         PopAddonTraceLogger = new PopAddonTraceLogger();
         IPC = new IPCProvider();
 
-        _settingsWindow = new SettingsWindow();
+        _infoWindow = new InfoWindow();
+        _settingsWindow = new SettingsWindow(_infoWindow);
         _confirmDialog = new ConfirmDialog();
         _takeDeleteConfirmDialog = new TakeDeleteConfirmDialog();
         _toolbarWindow = new ToolbarWindow(_confirmDialog, _takeDeleteConfirmDialog);
@@ -87,6 +95,7 @@ public sealed class Plugin : IDalamudPlugin
         _sensitivePopConfirm = new SensitivePopConfirm();
         _archiveWindow = new ArchiveWindow();
 
+        _windowSystem.AddWindow(_infoWindow);
         _windowSystem.AddWindow(_settingsWindow);
         _windowSystem.AddWindow(_confirmDialog);
         _windowSystem.AddWindow(_takeDeleteConfirmDialog);
@@ -106,6 +115,13 @@ public sealed class Plugin : IDalamudPlugin
         });
 
         Log.Info("[Mogmail] loaded");
+
+        if (Common.Changelog.Revision > Config.LastSeenWhatsNewRevision)
+        {
+            Config.LastSeenWhatsNewRevision = Common.Changelog.Revision;
+            Config.Save();
+            _infoWindow.OpenTo(InfoTab.Changelog);
+        }
     }
 
     public void Dispose()
@@ -135,7 +151,7 @@ public sealed class Plugin : IDalamudPlugin
         Config.Save();
 
         Log.Info("[Mogmail] unloaded");
-        Services.MogLog.Shutdown();
+        Log.Shutdown();
     }
 
     private void OnDraw()
@@ -169,13 +185,13 @@ public sealed class Plugin : IDalamudPlugin
             case "archive":
                 if (!Config.EnableArchive)
                 {
-                    Chat.Print("[Mogmail] archive is disabled. Enable it in Settings > General > Archive.");
+                    Common.Chat.Result("archive is disabled. Enable it in Settings > General > Archive.");
                     return;
                 }
                 OpenArchiveWindow();
                 return;
             default:
-                Chat.Print($"[Mogmail] unknown subcommand \"{sub}\". Try: pop, stop, archive.");
+                Common.Chat.Warn($"unknown subcommand \"{sub}\". Try: pop, stop, archive.");
                 return;
         }
     }

@@ -4,6 +4,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Mogmail.Constants;
+using Mogmail.Diagnostics;
 #endif
 
 namespace Mogmail.Services;
@@ -34,13 +35,13 @@ public sealed unsafe class PopAddonTraceLogger : IDisposable
     {
         if (Plugin.Instance.PopQueue.IsIdle) return;
         var prompt = ReadPrompt(args);
-        MogLog.Information($"[Mogmail][diag] addon PostSetup {args.AddonName} prompt=\"{Truncate(prompt, 120)}\"");
+        Log.Info($"[Mogmail][diag] addon PostSetup {args.AddonName} prompt=\"{Truncate(prompt, 120)}\"");
     }
 
     private static void OnFinalize(AddonEvent type, AddonArgs args)
     {
         if (Plugin.Instance.PopQueue.IsIdle) return;
-        MogLog.Information($"[Mogmail][diag] addon PreFinalize {args.AddonName}");
+        Log.Info($"[Mogmail][diag] addon PreFinalize {args.AddonName}");
     }
 
     private static string ReadPrompt(AddonArgs args)
